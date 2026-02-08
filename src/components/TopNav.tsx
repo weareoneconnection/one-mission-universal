@@ -1,96 +1,115 @@
 "use client";
 
+import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
-function NavLink({ href, label }: { href: string; label: string }) {
-  const pathname = usePathname();
-  const active = pathname === href || pathname.startsWith(href + "/");
-
-  return (
-    <Link
-      href={href}
-      style={{
-        padding: "8px 10px",
-        borderRadius: 10,
-        textDecoration: "none",
-        fontWeight: 800,
-        color: active ? "white" : "#111827",
-        background: active ? "#111827" : "transparent",
-      }}
-    >
-      {label}
-    </Link>
-  );
+function cn(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
 }
 
-function getProjectIdFromPathname(pathname: string) {
-  // matches: /p/<projectId>/...
-  if (!pathname) return "";
-  const parts = pathname.split("/").filter(Boolean); // ["p", "<projectId>", ...]
-  if (parts[0] !== "p") return "";
-  return parts[1] || "";
-}
+const NAV = [
+  { href: "/projects", label: "Projects" },
+  { href: "/missions", label: "Missions" },
+  { href: "/ai", label: "One AI" },
+  { href: "/profile", label: "Profile" },
+];
 
 export default function TopNav() {
   const pathname = usePathname();
-  const projectId = getProjectIdFromPathname(pathname);
+  const [open, setOpen] = useState(false);
+
+  const isActive = (href: string) => (pathname || "").startsWith(href);
 
   return (
-    <header
-      style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 50,
-        background: "white",
-        borderBottom: "1px solid #e5e7eb",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 1200,
-          margin: "0 auto",
-          padding: "12px 16px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        {/* Left */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <Link
-            href="/"
-            style={{
-              fontWeight: 950,
-              fontSize: 18,
-              letterSpacing: 0.5,
-              textDecoration: "none",
-              color: "#111827",
-            }}
-          >
+    <header className="sticky top-0 z-50 border-b bg-white">
+      <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-3 px-4 py-3">
+        {/* Left: brand */}
+        <div className="flex min-w-0 items-center gap-3">
+          <Link href="/" className="shrink-0 font-black tracking-wide text-gray-900">
             ONE&nbsp;MISSION
           </Link>
 
-          <nav style={{ display: "flex", gap: 6 }}>
-            <NavLink href="/projects" label="Projects" />
-            <NavLink href="/missions" label="Missions" />
-            <NavLink href="/ai" label="One AI" />
-            <NavLink href="/profile" label="Profile" />
-
-            {/* ✅ 只有在 /p/[projectId]/... 路由下才显示 */}
-            {projectId ? (
-              <NavLink href={`/p/${projectId}/admin/reviews`} label="Admin" />
-            ) : null}
+          {/* Desktop nav */}
+          <nav className="hidden md:flex items-center gap-2">
+            {NAV.map((n) => (
+              <Link
+                key={n.href}
+                href={n.href}
+                className={cn(
+                  "rounded-xl px-3 py-2 text-sm font-extrabold",
+                  isActive(n.href) ? "bg-gray-900 text-white" : "text-gray-900 hover:bg-gray-100"
+                )}
+              >
+                {n.label}
+              </Link>
+            ))}
           </nav>
         </div>
 
-        {/* Right */}
-        <div>
-          <WalletMultiButton />
+        {/* Right: wallet + mobile menu button */}
+        <div className="flex min-w-0 flex-nowrap items-center gap-2">
+          {/* Wallet button: hard-limit width on mobile so it never overflows */}
+          <div className="walletWrap w-[148px] sm:w-auto min-w-0 overflow-hidden">
+            <WalletMultiButton />
+          </div>
+
+          {/* Mobile menu toggle */}
+          <button
+            type="button"
+            className="md:hidden inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-white"
+            onClick={() => setOpen((v) => !v)}
+            aria-label="Toggle menu"
+          >
+            <span className="text-lg">{open ? "✕" : "☰"}</span>
+          </button>
         </div>
       </div>
+
+      {/* Mobile dropdown */}
+      <div className={cn("md:hidden border-t bg-white", open ? "block" : "hidden")}>
+        <div className="mx-auto max-w-[1200px] px-4 py-3">
+          <div className="grid grid-cols-2 gap-2">
+            {NAV.map((n) => (
+              <Link
+                key={n.href}
+                href={n.href}
+                onClick={() => setOpen(false)}
+                className={cn(
+                  "rounded-xl px-3 py-2 text-sm font-extrabold text-center",
+                  isActive(n.href) ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-900"
+                )}
+              >
+                {n.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ✅ Tailwind can't easily target wallet-adapter internals, so we clamp it here safely */}
+      <style jsx global>{`
+        /* prevent wallet button from pushing layout on small screens */
+        .walletWrap .wallet-adapter-button {
+          width: 100%;
+          max-width: 220px;
+          justify-content: center;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          border-radius: 12px;
+          padding: 10px 12px;
+          font-weight: 800;
+        }
+        /* make the label smaller on mobile so it fits */
+        @media (max-width: 640px) {
+          .walletWrap .wallet-adapter-button {
+            font-size: 12px;
+            padding: 10px 10px;
+          }
+        }
+      `}</style>
     </header>
   );
 }

@@ -172,7 +172,7 @@ export default function HomePage() {
     // 1) try global endpoint
     try {
       const prJson = await fetch("/api/proofs?limit=20", { cache: "no-store" }).then((r) => r.json());
-      const list = Array.isArray(prJson) ? prJson : (prJson?.proofs || prJson?.items || prJson?.data || []);
+      const list = Array.isArray(prJson) ? prJson : prJson?.proofs || prJson?.items || prJson?.data || [];
       if (Array.isArray(list) && list.length > 0) return { list, source: "global" };
     } catch {}
 
@@ -189,7 +189,8 @@ export default function HomePage() {
 
     return { list: [], source: "none" };
   }
-    async function loadChainStatus() {
+
+  async function loadChainStatus() {
     try {
       const j = await fetch("/api/chain/status", { cache: "no-store" }).then((r) => r.json());
 
@@ -201,11 +202,10 @@ export default function HomePage() {
           mode: "ONCHAIN",
           network: "solana",
           lastSyncAt: typeof j.lastSyncAt === "number" ? j.lastSyncAt : prev.lastSyncAt,
-          pendingQueue: typeof j?.queue?.length === "number" ? j.queue.length : safeNumber(j.pendingQueue, prev.pendingQueue ?? 0),
+          pendingQueue:
+            typeof j?.queue?.length === "number" ? j.queue.length : safeNumber(j.pendingQueue, prev.pendingQueue ?? 0),
           onchainRecords:
-            typeof j.finalizedCount === "number"
-              ? j.finalizedCount
-              : safeNumber(j.onchainRecords, prev.onchainRecords ?? 0),
+            typeof j.finalizedCount === "number" ? j.finalizedCount : safeNumber(j.onchainRecords, prev.onchainRecords ?? 0),
           lastError: j.lastError ? String(j.lastError) : undefined,
         }));
       }
@@ -301,7 +301,8 @@ export default function HomePage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet]);
-    useEffect(() => {
+
+  useEffect(() => {
     loadChainStatus();
     const t = setInterval(loadChainStatus, 8000); // 8秒刷新一次
     return () => clearInterval(t);
@@ -354,7 +355,10 @@ export default function HomePage() {
 
   const recentProjects = useMemo(() => projects.slice().sort((a, b) => b.createdAt - a.createdAt).slice(0, 3), [projects]);
   const recentMissions = useMemo(() => missions.slice().sort((a, b) => b.createdAt - a.createdAt).slice(0, 4), [missions]);
-  const recentProofs = useMemo(() => proofs.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 8), [proofs]);
+  const recentProofs = useMemo(
+    () => proofs.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 8),
+    [proofs]
+  );
 
   const activityList = useMemo(() => {
     const q = activityQuery.trim().toLowerCase();
@@ -379,14 +383,10 @@ export default function HomePage() {
   ========================= */
 
   const phaseLabel =
-    chainStatus.mode === "ONCHAIN"
-      ? "On-chain · Live"
-      : chainStatus.mode === "PREPARING"
-      ? "On-chain · Preparing"
-      : "MVP · Off-chain";
+    chainStatus.mode === "ONCHAIN" ? "On-chain · Live" : chainStatus.mode === "PREPARING" ? "On-chain · Preparing" : "MVP · Off-chain";
 
   return (
-    <main style={{ padding: 28, paddingBottom: 80, maxWidth: 1160, margin: "0 auto" }}>
+    <main style={{ padding: "clamp(16px, 4vw, 28px)", paddingBottom: "clamp(56px, 10vw, 80px)", maxWidth: 1160, margin: "0 auto" }}>
       {/* Hero */}
       <section style={{ marginTop: 6 }}>
         <div style={heroWrap}>
@@ -412,13 +412,13 @@ export default function HomePage() {
                 </span>
               </div>
 
-              <h1 style={{ marginTop: 12, fontSize: 44, fontWeight: 950, lineHeight: 1.05 }}>
+              <h1 style={{ marginTop: 12, fontSize: "clamp(28px, 5vw, 44px)", fontWeight: 950, lineHeight: 1.05 }}>
                 One Mission Universal
                 <br />
                 Contribution → Identity → On-chain
               </h1>
 
-              <p style={{ marginTop: 12, fontSize: 16, opacity: 0.85, maxWidth: 860, lineHeight: 1.6 }}>
+              <p style={{ marginTop: 12, fontSize: "clamp(14px, 2.2vw, 16px)", opacity: 0.85, maxWidth: 860, lineHeight: 1.6 }}>
                 A universal Proof-of-Contribution console for projects and users. Review remains human; the chain is the
                 permanent record.
               </p>
@@ -456,7 +456,7 @@ export default function HomePage() {
             </div>
 
             {/* Right column */}
-            <div style={{ flex: "0 0 380px", minWidth: 280 }}>
+            <div style={{ flex: "1 1 380px", minWidth: 280, maxWidth: 520 }}>
               <div style={card}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
                   <div style={{ fontSize: 14, fontWeight: 950 }}>System Status</div>
@@ -492,7 +492,12 @@ export default function HomePage() {
                 </div>
 
                 <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
-                  <StatRow label="Mode" value={chainStatus.mode === "ONCHAIN" ? "On-chain (live)" : chainStatus.mode === "PREPARING" ? "Preparing" : "Off-chain"} />
+                  <StatRow
+                    label="Mode"
+                    value={
+                      chainStatus.mode === "ONCHAIN" ? "On-chain (live)" : chainStatus.mode === "PREPARING" ? "Preparing" : "Off-chain"
+                    }
+                  />
                   <StatRow label="Last sync" value={chainStatus.lastSyncAt ? fmtTime(chainStatus.lastSyncAt) : "—"} />
                   <StatRow label="Pending queue" value={String(chainStatus.pendingQueue ?? 0)} />
                   <StatRow label="On-chain records" value={String(chainStatus.onchainRecords ?? 0)} />
@@ -508,6 +513,7 @@ export default function HomePage() {
                       background: "#fef2f2",
                       color: "#991b1b",
                       fontWeight: 900,
+                      overflowWrap: "anywhere",
                     }}
                   >
                     {chainStatus.lastError}
@@ -769,9 +775,7 @@ export default function HomePage() {
               <FinalCta mode={chainStatus.mode} />
             </section>
 
-            <footer style={footer}>
-              Activity is capped at 20 for speed.
-            </footer>
+            <footer style={footer}>Activity is capped at 20 for speed.</footer>
 
             <div style={copyright}>
               © {new Date().getFullYear()} WAOC · We Are One Connection · weareoneconnection.org
@@ -789,9 +793,23 @@ export default function HomePage() {
 
 function StatRow({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-      <div style={{ opacity: 0.75 }}>{label}</div>
-      <div style={{ fontWeight: 950 }}>{value}</div>
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+      <div style={{ opacity: 0.75, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {label}
+      </div>
+      <div
+        style={{
+          fontWeight: 950,
+          flexShrink: 0,
+          maxWidth: "60%",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          textAlign: "right",
+        }}
+      >
+        {value}
+      </div>
     </div>
   );
 }
@@ -811,7 +829,7 @@ function Panel({
     <div style={panelCard}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
         <div style={{ fontSize: 15, fontWeight: 950 }}>{title}</div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
           {subtitle && <div style={{ fontSize: 12, opacity: 0.7 }}>{subtitle}</div>}
           {rightLink && rightLink.href && (
             <a href={rightLink.href} style={rightLinkStyle}>
@@ -839,7 +857,7 @@ function ItemRow({ title, meta, href, right }: { title: string; meta: string; hr
             {title}
           </a>
         </div>
-        <div style={{ marginTop: 6, fontSize: 13, opacity: 0.75, wordBreak: "break-all" }}>{meta}</div>
+        <div style={{ marginTop: 6, fontSize: 13, opacity: 0.75, overflowWrap: "anywhere" }}>{meta}</div>
       </div>
       {right && <div style={rightTag}>{right}</div>}
     </div>
@@ -866,7 +884,7 @@ function ActionCard(props: {
 }) {
   return (
     <div style={actionCard}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ fontSize: 15, fontWeight: 950 }}>{props.title}</div>
         {props.badge && <span style={badgePill}>{props.badge}</span>}
       </div>
@@ -1035,7 +1053,7 @@ function FinalCta({ mode }: { mode: "OFFCHAIN" | "PREPARING" | "ONCHAIN" }) {
 const heroWrap: React.CSSProperties = {
   border: "1px solid #e5e7eb",
   borderRadius: 18,
-  padding: 20,
+  padding: "clamp(14px, 3.5vw, 20px)",
   background:
     "radial-gradient(1200px 420px at 20% 0%, rgba(17,24,39,0.10), transparent), radial-gradient(800px 300px at 90% 20%, rgba(17,24,39,0.06), transparent)",
 };
@@ -1043,14 +1061,14 @@ const heroWrap: React.CSSProperties = {
 const card: React.CSSProperties = {
   border: "1px solid #e5e7eb",
   borderRadius: 16,
-  padding: 16,
+  padding: "clamp(14px, 3vw, 16px)",
   background: "white",
 };
 
 const panelCard: React.CSSProperties = {
   border: "1px solid #e5e7eb",
   borderRadius: 18,
-  padding: 16,
+  padding: "clamp(14px, 3vw, 16px)",
   background: "white",
 };
 
@@ -1061,7 +1079,8 @@ const itemRow: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   gap: 12,
-  alignItems: "center",
+  alignItems: "flex-start",
+  flexWrap: "wrap",
   background: "white",
 };
 
@@ -1073,6 +1092,7 @@ const rightTag: React.CSSProperties = {
   border: "1px solid #e5e7eb",
   borderRadius: 999,
   flexShrink: 0,
+  alignSelf: "flex-start",
 };
 
 const dashedBox: React.CSSProperties = {
@@ -1092,11 +1112,12 @@ const proofRow: React.CSSProperties = {
   justifyContent: "space-between",
   gap: 12,
   flexWrap: "wrap",
+  alignItems: "flex-start",
   background: "white",
 };
 
 const actionCard: React.CSSProperties = {
-  padding: 16,
+  padding: "clamp(14px, 3vw, 16px)",
   border: "1px solid #e5e7eb",
   borderRadius: 16,
   background: "white",
@@ -1192,7 +1213,7 @@ const rightLinkBtn: React.CSSProperties = {
 
 const searchInput: React.CSSProperties = {
   flex: 1,
-  minWidth: 260,
+  minWidth: 200,
   padding: "11px 12px",
   borderRadius: 14,
   border: "1px solid #e5e7eb",
@@ -1236,7 +1257,7 @@ const copyright: React.CSSProperties = {
 const sysWrap: React.CSSProperties = {
   border: "1px solid #e5e7eb",
   borderRadius: 18,
-  padding: 16,
+  padding: "clamp(14px, 3vw, 16px)",
   background: "white",
 };
 
@@ -1273,7 +1294,7 @@ const pipePill: React.CSSProperties = {
 /* ✅ Upgraded Final CTA styles */
 const ctaWrap: React.CSSProperties = {
   borderRadius: 20,
-  padding: 18,
+  padding: "clamp(14px, 3vw, 18px)",
   color: "white",
   display: "flex",
   justifyContent: "space-between",

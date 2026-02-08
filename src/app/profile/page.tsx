@@ -262,17 +262,40 @@ function StatCard(props: {
 
   return (
     <div
+      className="statCard"
       style={{
         border: `1px solid ${borderMap[accent]}`,
         background: bgMap[accent],
         borderRadius: 18,
         padding: 14,
         boxShadow: "0 1px 0 rgba(0,0,0,0.03)",
+        minWidth: 0, // ✅ 关键：避免 grid/flex 下长文本撑爆导致重叠
       }}
     >
       <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 900 }}>{props.label}</div>
-      <div style={{ marginTop: 6, fontSize: 26, fontWeight: 950, lineHeight: 1.05 }}>{props.value}</div>
-      {props.hint && <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>{props.hint}</div>}
+
+      <div
+        className="statValue"
+        style={{
+          marginTop: 6,
+          fontSize: 26,
+          fontWeight: 950,
+          lineHeight: 1.05,
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+        title={String(props.value)}
+      >
+        {props.value}
+      </div>
+
+      {props.hint && (
+        <div className="statHint" style={{ marginTop: 6, fontSize: 12, opacity: 0.7, minWidth: 0 }}>
+          {props.hint}
+        </div>
+      )}
     </div>
   );
 }
@@ -291,6 +314,8 @@ function Chip(props: { active?: boolean; onClick?: () => void; children: React.R
         fontWeight: 950,
         cursor: "pointer",
         letterSpacing: 0.2,
+        whiteSpace: "nowrap",
+        flexShrink: 0, // ✅ 横向滚动时不被压扁
       }}
     >
       {props.children}
@@ -313,7 +338,6 @@ function emptyBox(title: string, desc?: string) {
 
 /* --- Explorer URL helper (长期可验证基础设施) --- */
 function explorerBase(cluster: string) {
-  // Solana Explorer 支持 ?cluster=devnet/testnet，自定义走 mainnet-beta
   if (cluster === "devnet") return "https://explorer.solana.com";
   if (cluster === "testnet") return "https://explorer.solana.com";
   if (cluster === "mainnet-beta") return "https://explorer.solana.com";
@@ -323,7 +347,7 @@ function explorerBase(cluster: string) {
 function explorerQuery(cluster: string) {
   if (cluster === "devnet") return "?cluster=devnet";
   if (cluster === "testnet") return "?cluster=testnet";
-  return ""; // mainnet-beta 默认
+  return "";
 }
 
 function explorerAccountUrl(cluster: string, address: string) {
@@ -381,66 +405,64 @@ export default function ProfilePage() {
       setLoading(false);
     }
   }
-function normalizeOnchain(data: any): OnchainProfile {
-  const ok = !!data?.ok;
 
-  return {
-    ok,
-    cluster: data?.cluster || "mainnet-beta",
-    rpc: data?.rpc || "",
-    programs: data?.programs || { points: "", mission: "" },
+  function normalizeOnchain(data: any): OnchainProfile {
+    const ok = !!data?.ok;
 
-    identity: {
-      initialized: !!data?.identity?.initialized,
-      identityPda: data?.identity?.identityPda || "",
-      createdAt: Number(data?.identity?.createdAt || 0),
-      lastUpdatedAt: Number(data?.identity?.lastUpdatedAt || 0),
-      lastUpdatedSlot: Number(data?.identity?.lastUpdatedSlot || 0),
-      level: Number(data?.identity?.level || 0),
-      badges: Array.isArray(data?.identity?.badges)
-        ? data.identity.badges
-        : [],
-    },
+    return {
+      ok,
+      cluster: data?.cluster || "mainnet-beta",
+      rpc: data?.rpc || "",
+      programs: data?.programs || { points: "", mission: "" },
 
-    totals: {
-      points: Number(data?.totals?.points || 0),
-      reputation: Number(data?.totals?.reputation || 0),
-    },
+      identity: {
+        initialized: !!data?.identity?.initialized,
+        identityPda: data?.identity?.identityPda || "",
+        createdAt: Number(data?.identity?.createdAt || 0),
+        lastUpdatedAt: Number(data?.identity?.lastUpdatedAt || 0),
+        lastUpdatedSlot: Number(data?.identity?.lastUpdatedSlot || 0),
+        level: Number(data?.identity?.level || 0),
+        badges: Array.isArray(data?.identity?.badges) ? data.identity.badges : [],
+      },
 
-    accounts: Array.isArray(data?.accounts) ? data.accounts : [],
-    recentTx: Array.isArray(data?.recentTx) ? data.recentTx : [],
+      totals: {
+        points: Number(data?.totals?.points || 0),
+        reputation: Number(data?.totals?.reputation || 0),
+      },
 
-    sync: data?.sync || { status: "UNKNOWN" },
+      accounts: Array.isArray(data?.accounts) ? data.accounts : [],
+      recentTx: Array.isArray(data?.recentTx) ? data.recentTx : [],
 
-    error: ok ? "" : String(data?.error || "ONCHAIN_API_FAILED"),
-  };
-}
+      sync: data?.sync || { status: "UNKNOWN" },
 
-async function loadOnchain() {
-  setOnchainErr(null);
-  if (!wallet) {
-    setOnchain(null);
-    return;
+      error: ok ? "" : String(data?.error || "ONCHAIN_API_FAILED"),
+    };
   }
-  setOnchainLoading(true);
-  try {
-    const res = await fetch(`/api/profile/onchain?wallet=${encodeURIComponent(wallet)}`, {
-      cache: "no-store",
-    });
 
-    const raw = await res.json();              // ✅ 不要直接 cast
-    const data = normalizeOnchain(raw);        // ✅ 先兜底结构
-    if (!data.ok) throw new Error(data.error || "Failed to load on-chain profile");
+  async function loadOnchain() {
+    setOnchainErr(null);
+    if (!wallet) {
+      setOnchain(null);
+      return;
+    }
+    setOnchainLoading(true);
+    try {
+      const res = await fetch(`/api/profile/onchain?wallet=${encodeURIComponent(wallet)}`, {
+        cache: "no-store",
+      });
 
-    setOnchain(data);                          // ✅ 这里已经是安全结构
-  } catch (e: any) {
-    setOnchainErr(String(e?.message || e));
-    setOnchain(null);
-  } finally {
-    setOnchainLoading(false);
+      const raw = await res.json();
+      const data = normalizeOnchain(raw);
+      if (!data.ok) throw new Error(data.error || "Failed to load on-chain profile");
+
+      setOnchain(data);
+    } catch (e: any) {
+      setOnchainErr(String(e?.message || e));
+      setOnchain(null);
+    } finally {
+      setOnchainLoading(false);
+    }
   }
-}
-
 
   useEffect(() => {
     load();
@@ -453,59 +475,51 @@ async function loadOnchain() {
   ========================= */
 
   const stats = useMemo(() => {
-  const all = proofs.length;
-  const pending = proofs.filter((p) => p.currentStatus === "PENDING").length;
-  const approved = proofs.filter((p) => p.currentStatus === "APPROVED").length;
-  const rejected = proofs.filter((p) => p.currentStatus === "REJECTED").length;
-  const revoked = proofs.filter((p) => p.currentStatus === "REVOKED").length;
+    const all = proofs.length;
+    const pending = proofs.filter((p) => p.currentStatus === "PENDING").length;
+    const approved = proofs.filter((p) => p.currentStatus === "APPROVED").length;
+    const rejected = proofs.filter((p) => p.currentStatus === "REJECTED").length;
+    const revoked = proofs.filter((p) => p.currentStatus === "REVOKED").length;
 
-  // 前端兜底：只按 Approved proof 的 points 累加
-  const fallbackTotalPoints = proofs.reduce((sum, p) => {
-    if (p.currentStatus !== "APPROVED") return sum;
-    const n = Number(p.points);
-    return sum + (Number.isFinite(n) ? n : 0);
-  }, 0);
+    const fallbackTotalPoints = proofs.reduce((sum, p) => {
+      if (p.currentStatus !== "APPROVED") return sum;
+      const n = Number(p.points);
+      return sum + (Number.isFinite(n) ? n : 0);
+    }, 0);
 
-  const fallbackTotalReputation = proofs.reduce((sum, p) => {
-    if (p.currentStatus === "PENDING") return sum;
-    const n = Number(p.reputationDelta);
-    return sum + (Number.isFinite(n) ? n : 0);
-  }, 0);
+    const fallbackTotalReputation = proofs.reduce((sum, p) => {
+      if (p.currentStatus === "PENDING") return sum;
+      const n = Number(p.reputationDelta);
+      return sum + (Number.isFinite(n) ? n : 0);
+    }, 0);
 
-  const s = summary || null;
+    const s = summary || null;
 
-  // summary 可信度校验：
-  // 1) summary.totalPoints 必须是有限数
-  // 2) 如果 approved>0，但 summary.totalPoints === 0，而 fallback>0，则 summary 很可能错
-  // 3) 如果 summary.totalPoints < fallbackTotalPoints（明显少算），也认为不可信
-  const summaryPoints = Number(s?.totalPoints);
-  const summaryPointsOk =
-    Number.isFinite(summaryPoints) &&
-    !(
-      (approved > 0 && summaryPoints === 0 && fallbackTotalPoints > 0) ||
-      (summaryPoints < fallbackTotalPoints)
-    );
+    const summaryPoints = Number(s?.totalPoints);
+    const summaryPointsOk =
+      Number.isFinite(summaryPoints) &&
+      !(
+        (approved > 0 && summaryPoints === 0 && fallbackTotalPoints > 0) ||
+        summaryPoints < fallbackTotalPoints
+      );
 
-  const summaryRep = Number(s?.totalReputation);
-  const summaryRepOk = Number.isFinite(summaryRep);
+    const summaryRep = Number(s?.totalReputation);
+    const summaryRepOk = Number.isFinite(summaryRep);
 
-  return {
-    all: Number.isFinite(Number(s?.totalProofs)) ? Number(s!.totalProofs) : all,
-    pending: Number.isFinite(Number(s?.pending)) ? Number(s!.pending) : pending,
-    approved: Number.isFinite(Number(s?.approved)) ? Number(s!.approved) : approved,
-    rejected: Number.isFinite(Number(s?.rejected)) ? Number(s!.rejected) : rejected,
-    revoked: Number.isFinite(Number(s?.revoked)) ? Number(s!.revoked) : revoked,
+    return {
+      all: Number.isFinite(Number(s?.totalProofs)) ? Number(s!.totalProofs) : all,
+      pending: Number.isFinite(Number(s?.pending)) ? Number(s!.pending) : pending,
+      approved: Number.isFinite(Number(s?.approved)) ? Number(s!.approved) : approved,
+      rejected: Number.isFinite(Number(s?.rejected)) ? Number(s!.rejected) : rejected,
+      revoked: Number.isFinite(Number(s?.revoked)) ? Number(s!.revoked) : revoked,
 
-    // ✅ 关键：summary 不可信就用前端兜底
-    totalPoints: summaryPointsOk ? summaryPoints : fallbackTotalPoints,
-    totalReputation: summaryRepOk ? summaryRep : fallbackTotalReputation,
+      totalPoints: summaryPointsOk ? summaryPoints : fallbackTotalPoints,
+      totalReputation: summaryRepOk ? summaryRep : fallbackTotalReputation,
 
-    // 给 sync 用（off-chain）
-    offchainApprovedPoints: summaryPointsOk ? summaryPoints : fallbackTotalPoints,
-    offchainReputation: summaryRepOk ? summaryRep : fallbackTotalReputation,
-  };
-}, [proofs, summary]);
-
+      offchainApprovedPoints: summaryPointsOk ? summaryPoints : fallbackTotalPoints,
+      offchainReputation: summaryRepOk ? summaryRep : fallbackTotalReputation,
+    };
+  }, [proofs, summary]);
 
   /* =========================
      Filter / Group（逻辑不变）
@@ -552,7 +566,6 @@ async function loadOnchain() {
     const diffPoints = chainPoints - offPoints;
     const diffRep = chainRep - offRep;
 
-    // 规则：差值为 0 或很小视为 synced
     const pointsOk = Math.abs(diffPoints) <= 0;
     const repOk = Math.abs(diffRep) <= 0;
 
@@ -592,8 +605,6 @@ async function loadOnchain() {
   const levelValue = useMemo(() => {
     const lv = Number(identity?.level ?? 0);
     if (lv > 0) return lv;
-    // fallback：用 points 映射一个长期开箱即用的 Level（你可以后端替换为链上真实 level）
-    // 规则：每 100 points 1 级，最低 1
     const p = Math.max(0, chainPoints);
     return p === 0 ? 0 : Math.max(1, Math.floor(p / 100) + 1);
   }, [identity?.level, chainPoints]);
@@ -603,37 +614,42 @@ async function loadOnchain() {
   ========================= */
 
   return (
-    <main style={{ padding: 24, maxWidth: 1160, margin: "0 auto" }}>
+    <main className="pageWrap" style={{ padding: 24, maxWidth: 1160, margin: "0 auto" }}>
       {/* Header */}
-      <header style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-end" }}>
-        <div>
+      <header
+        className="pageHeader"
+        style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-end" }}
+      >
+        <div style={{ minWidth: 0 }}>
           <h1 style={{ fontSize: 36, fontWeight: 950, margin: 0, letterSpacing: -0.5 }}>My Proofs</h1>
-          <div style={{ marginTop: 10, opacity: 0.8, display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ marginTop: 10, opacity: 0.8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <span style={{ fontWeight: 900, fontSize: 13 }}>Wallet</span>
             {wallet ? (
               <code
+                className="truncateCode"
                 style={{
                   padding: "4px 8px",
                   borderRadius: 10,
                   border: "1px solid #e5e7eb",
                   background: "#f9fafb",
                   fontWeight: 800,
+                  minWidth: 0,
                 }}
+                title={wallet}
               >
                 {shortWallet(wallet)}
               </code>
             ) : (
               <span style={{ color: "#b91c1c", fontWeight: 900 }}>not connected</span>
             )}
-            {connected && wallet && (
-              <span style={{ fontSize: 12, opacity: 0.7 }}>· proofs are scoped to this wallet</span>
-            )}
+            {connected && wallet && <span style={{ fontSize: 12, opacity: 0.7 }}>· proofs are scoped to this wallet</span>}
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10 }}>
+        <div className="headerActions" style={{ display: "flex", gap: 10 }}>
           <a
             href="/missions"
+            className="actionBtn"
             style={{
               padding: "10px 14px",
               borderRadius: 14,
@@ -643,6 +659,7 @@ async function loadOnchain() {
               color: "#111",
               background: "white",
               boxShadow: "0 1px 0 rgba(0,0,0,0.03)",
+              textAlign: "center",
             }}
           >
             Browse Missions
@@ -652,6 +669,7 @@ async function loadOnchain() {
               load();
               loadOnchain();
             }}
+            className="actionBtn"
             style={{
               padding: "10px 14px",
               borderRadius: 14,
@@ -686,13 +704,7 @@ async function loadOnchain() {
 
       {/* Stats */}
       <section style={{ marginTop: 18 }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
-            gap: 12,
-          }}
-        >
+        <div className="statsGrid" style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 12 }}>
           <StatCard label="All proofs" value={stats.all} />
           <StatCard label="Pending" value={stats.pending} hint="Waiting for review" accent="amber" />
           <StatCard label="Approved" value={stats.approved} hint="Earn points" accent="green" />
@@ -708,19 +720,32 @@ async function loadOnchain() {
       <section style={{ marginTop: 14 }}>
         <div style={{ border: "1px solid #e5e7eb", borderRadius: 18, background: "white" }}>
           <div style={{ padding: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-              <div>
+            <div
+              className="onchainHeader"
+              style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}
+            >
+              <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 950, fontSize: 16 }}>On-chain Identity</div>
                 <div style={{ marginTop: 4, opacity: 0.7, fontSize: 13 }}>
                   Long-term, verifiable infrastructure for your contribution identity.
                 </div>
               </div>
 
-              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <div
+                className="onchainActions"
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  justifyContent: "flex-end",
+                }}
+              >
                 {identityPill}
                 {syncPill}
                 <button
                   onClick={loadOnchain}
+                  className="actionBtn"
                   style={{
                     padding: "10px 14px",
                     borderRadius: 14,
@@ -757,13 +782,7 @@ async function loadOnchain() {
           )}
 
           <div style={{ padding: 14 }}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
-                gap: 12,
-              }}
-            >
+            <div className="statsGrid" style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 12 }}>
               <StatCard
                 label="Identity"
                 value={onchainLoading ? "…" : identity?.initialized ? "Initialized" : "Not initialized"}
@@ -777,12 +796,7 @@ async function loadOnchain() {
                 accent={identity?.initialized ? "green" : "amber"}
               />
 
-              <StatCard
-                label="On-chain Points"
-                value={onchainLoading ? "…" : chainPoints}
-                hint="Verifiable aggregate"
-                accent="purple"
-              />
+              <StatCard label="On-chain Points" value={onchainLoading ? "…" : chainPoints} hint="Verifiable aggregate" accent="purple" />
 
               <StatCard
                 label="Chain Receipts"
@@ -800,23 +814,23 @@ async function loadOnchain() {
 
               <StatCard
                 label="Sync"
-                value={onchainLoading ? "…" : derivedSync.status === "SYNCED" ? "Synced" : derivedSync.status === "OUT_OF_SYNC" ? "Out of sync" : "Unknown"}
-                hint={
+                value={
                   onchainLoading
-                    ? "Comparing off-chain vs chain…"
-                    : `Δ points ${derivedSync.diffPoints >= 0 ? "+" : ""}${derivedSync.diffPoints}`
+                    ? "…"
+                    : derivedSync.status === "SYNCED"
+                      ? "Synced"
+                      : derivedSync.status === "OUT_OF_SYNC"
+                        ? "Out of sync"
+                        : "Unknown"
                 }
+                hint={onchainLoading ? "Comparing off-chain vs chain…" : `Δ points ${derivedSync.diffPoints >= 0 ? "+" : ""}${derivedSync.diffPoints}`}
                 accent={derivedSync.status === "SYNCED" ? "green" : derivedSync.status === "OUT_OF_SYNC" ? "amber" : "neutral"}
               />
 
               <StatCard
                 label="Network"
-                value={onchainLoading ? "…" : (onchain?.cluster || "mainnet-beta")}
-                hint={
-                 onchain?.programs?.points
-                  ? `Program ${shortWallet(onchain.programs.points)}`
-                  : "Program not set"
-               }
+                value={onchainLoading ? "…" : onchain?.cluster || "mainnet-beta"}
+                hint={onchain?.programs?.points ? `Program ${shortWallet(onchain.programs.points)}` : "Program not set"}
                 accent="neutral"
               />
             </div>
@@ -885,6 +899,7 @@ async function loadOnchain() {
                       onchain!.accounts!.map((a, idx) => (
                         <div
                           key={idx}
+                          className="rowCard"
                           style={{
                             display: "flex",
                             justifyContent: "space-between",
@@ -898,15 +913,15 @@ async function loadOnchain() {
                         >
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontWeight: 950, fontSize: 13 }}>{a.label}</div>
-                            <div style={{ marginTop: 4, fontSize: 12, opacity: 0.8 }}>
-                              <code>{shortWallet(a.address)}</code>
+                            <div style={{ marginTop: 4, fontSize: 12, opacity: 0.8, minWidth: 0 }}>
+                              <code className="truncateCode">{shortWallet(a.address)}</code>
                             </div>
                           </div>
                           <a
                             href={explorerAccountUrl(chainCluster, a.address)}
                             target="_blank"
                             rel="noreferrer"
-                            style={{ fontWeight: 950, textDecoration: "underline", fontSize: 13 }}
+                            style={{ fontWeight: 950, textDecoration: "underline", fontSize: 13, flexShrink: 0 }}
                           >
                             View
                           </a>
@@ -942,19 +957,19 @@ async function loadOnchain() {
                           }}
                         >
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 950, fontSize: 13 }}>
+                            <div style={{ fontWeight: 950, fontSize: 13, minWidth: 0 }}>
                               {t.type || "TRANSACTION"}{" "}
                               <span style={{ opacity: 0.7, fontWeight: 900 }}>· {t.at ? fmtTime(t.at) : "—"}</span>
                             </div>
-                            <div style={{ marginTop: 4, fontSize: 12, opacity: 0.8 }}>
-                              <code>{shortWallet(t.signature)}</code>
+                            <div style={{ marginTop: 4, fontSize: 12, opacity: 0.8, minWidth: 0 }}>
+                              <code className="truncateCode">{shortWallet(t.signature)}</code>
                             </div>
                           </div>
                           <a
                             href={explorerTxUrl(chainCluster, t.signature)}
                             target="_blank"
                             rel="noreferrer"
-                            style={{ fontWeight: 950, textDecoration: "underline", fontSize: 13 }}
+                            style={{ fontWeight: 950, textDecoration: "underline", fontSize: 13, flexShrink: 0 }}
                           >
                             View
                           </a>
@@ -973,10 +988,8 @@ async function loadOnchain() {
                       verifiable identity aggregates (points / reputation).
                     </div>
                     <div style={{ marginTop: 8 }}>
-                      Current diff: <b>Δ points</b>{" "}
-                      {derivedSync.diffPoints >= 0 ? "+" : ""}
-                      {derivedSync.diffPoints}, <b>Δ rep</b>{" "}
-                      {derivedSync.diffRep >= 0 ? "+" : ""}
+                      Current diff: <b>Δ points</b> {derivedSync.diffPoints >= 0 ? "+" : ""}
+                      {derivedSync.diffPoints}, <b>Δ rep</b> {derivedSync.diffRep >= 0 ? "+" : ""}
                       {derivedSync.diffRep}.
                     </div>
                     {onchain?.sync?.note && <div style={{ marginTop: 8, opacity: 0.85 }}>{onchain.sync.note}</div>}
@@ -989,8 +1002,16 @@ async function loadOnchain() {
       </section>
 
       {/* Controls */}
-      <section style={{ marginTop: 14, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <section
+        style={{
+          marginTop: 14,
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        <div className="chipRow" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {(["ALL", "PENDING", "APPROVED", "REJECTED"] as Tab[]).map((t) => (
             <Chip key={t} active={tab === t} onClick={() => setTab(t)}>
               {t}
@@ -1028,7 +1049,7 @@ async function loadOnchain() {
             <div style={{ marginTop: 8, opacity: 0.75 }}>
               You haven’t submitted any proofs yet (or your filter/search matches nothing).
             </div>
-            <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
+            <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
               <a
                 href="/missions"
                 style={{
@@ -1064,26 +1085,23 @@ async function loadOnchain() {
             {grouped.map(([proj, items]) => (
               <div key={proj} style={{ border: "1px solid #e5e7eb", borderRadius: 18, background: "white" }}>
                 <div style={{ padding: 14 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontWeight: 950, fontSize: 16 }}>
-                        Project <code>{proj}</code>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 950, fontSize: 16, minWidth: 0 }}>
+                        Project <code className="truncateCode">{proj}</code>
                       </div>
                       <div style={{ marginTop: 4, opacity: 0.7, fontSize: 13 }}>{items.length} proof(s)</div>
                     </div>
 
-                    {/* Project mini summary（不改逻辑，只做展示） */}
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
                       <span style={{ fontSize: 12, fontWeight: 900, opacity: 0.75 }}>
                         Approved: {items.filter((p) => p.currentStatus === "APPROVED").length}
                       </span>
                       <span style={{ fontSize: 12, fontWeight: 900, opacity: 0.75 }}>
-                        Points:{" "}
-                        {items.reduce((s, p) => s + (p.currentStatus === "APPROVED" ? Number(p.points ?? 0) : 0), 0)}
+                        Points: {items.reduce((s, p) => s + (p.currentStatus === "APPROVED" ? Number(p.points ?? 0) : 0), 0)}
                       </span>
                       <span style={{ fontSize: 12, fontWeight: 900, opacity: 0.75 }}>
-                        Rep:{" "}
-                        {items.reduce((s, p) => s + (p.currentStatus !== "PENDING" ? Number(p.reputationDelta ?? 0) : 0), 0)}
+                        Rep: {items.reduce((s, p) => s + (p.currentStatus !== "PENDING" ? Number(p.reputationDelta ?? 0) : 0), 0)}
                       </span>
                     </div>
                   </div>
@@ -1096,7 +1114,6 @@ async function loadOnchain() {
                     const last = p.events?.[p.events.length - 1];
                     const updated = Number(p.updatedAt ?? last?.at ?? p.createdAt ?? 0);
 
-                    // 兼容：你现在提交时 payload 在 proof.root 上，不一定写入 SUBMITTED event.payload
                     const fromEventSubmitted = p.events?.find((e) => e.type === "SUBMITTED")?.payload;
                     const payload = p.payload || fromEventSubmitted || {};
                     const links = Array.isArray(payload.links) ? payload.links : [];
@@ -1115,15 +1132,15 @@ async function loadOnchain() {
                           background: "#ffffff",
                         }}
                       >
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 950, fontSize: 15 }}>
-                              Mission <code>{p.missionId}</code>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontWeight: 950, fontSize: 15, minWidth: 0 }}>
+                              Mission <code className="truncateCode">{p.missionId}</code>
                             </div>
 
                             <div style={{ marginTop: 6, fontSize: 13, opacity: 0.75, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                              <span>
-                                Proof <code>{p.id}</code>
+                              <span style={{ minWidth: 0 }}>
+                                Proof <code className="truncateCode">{p.id}</code>
                               </span>
                               <span>· Updated {fmtTime(updated)}</span>
                             </div>
@@ -1131,30 +1148,28 @@ async function loadOnchain() {
                             {(note || links.length > 0) && (
                               <div style={{ marginTop: 10 }}>
                                 {note && (
-                                  <div style={{ fontSize: 13, lineHeight: 1.45, marginBottom: links.length ? 8 : 0 }}>
+                                  <div style={{ fontSize: 13, lineHeight: 1.45, marginBottom: links.length ? 8 : 0, wordBreak: "break-word" }}>
                                     <span style={{ fontWeight: 950 }}>Note:</span>{" "}
                                     <span style={{ opacity: 0.9 }}>{note}</span>
                                   </div>
                                 )}
 
                                 {links.length > 0 && (
-                                  <div style={{ fontSize: 13 }}>
-                                    <span style={{ fontWeight: 950 }}>Links:</span>{" "}
+                                  <div style={{ fontSize: 13, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                                    <span style={{ fontWeight: 950 }}>Links:</span>
                                     {links.slice(0, 3).map((u, i) => (
                                       <a
                                         key={i}
                                         href={u}
                                         target="_blank"
                                         rel="noreferrer"
-                                        style={{ marginLeft: 8, textDecoration: "underline", fontWeight: 900 }}
+                                        style={{ textDecoration: "underline", fontWeight: 900 }}
                                       >
                                         link{i + 1}
                                       </a>
                                     ))}
                                     {links.length > 3 && (
-                                      <span style={{ marginLeft: 10, opacity: 0.7, fontWeight: 900 }}>
-                                        +{links.length - 3} more
-                                      </span>
+                                      <span style={{ opacity: 0.7, fontWeight: 900 }}>+{links.length - 3} more</span>
                                     )}
                                   </div>
                                 )}
@@ -1165,7 +1180,6 @@ async function loadOnchain() {
                           <div style={{ textAlign: "right", flexShrink: 0 }}>
                             {statusPill(p.currentStatus)}
 
-                            {/* 右侧奖励展示（不改逻辑：Approved 才显示） */}
                             {p.currentStatus === "APPROVED" && (
                               <div style={{ marginTop: 10, fontSize: 13, fontWeight: 950, color: "#111827" }}>
                                 <span style={{ marginRight: 10 }}>+{pts} pts</span>
@@ -1198,15 +1212,15 @@ async function loadOnchain() {
                               <div style={{ borderLeft: "2px solid #e5e7eb", paddingLeft: 12 }}>
                                 {p.events.map((e) => (
                                   <div key={e.id} style={{ marginBottom: 14 }}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                                       <div style={{ fontWeight: 950 }}>{e.type}</div>
                                       <div style={{ fontSize: 12, opacity: 0.7 }}>{fmtTime(e.at)}</div>
                                     </div>
                                     <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
-                                      by <code>{shortWallet(e.by)}</code>
+                                      by <code className="truncateCode">{shortWallet(e.by)}</code>
                                     </div>
                                     {e.reason && (
-                                      <div style={{ marginTop: 6, fontSize: 13, opacity: 0.9 }}>
+                                      <div style={{ marginTop: 6, fontSize: 13, opacity: 0.9, wordBreak: "break-word" }}>
                                         <b>Reason:</b> {e.reason}
                                       </div>
                                     )}
@@ -1225,6 +1239,136 @@ async function loadOnchain() {
           </div>
         )}
       </section>
+
+      {/* ✅ 移动端响应式：不改结构，只用 CSS 做断点 */}
+      <style jsx>{`
+        .truncateCode {
+          display: inline-block;
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          vertical-align: bottom;
+        }
+
+        /* hint 两行夹断（防止 mainnet-beta / Program XXX 把卡撑爆） */
+        :global(.statHint) {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          word-break: break-word;
+        }
+
+        /* 手机整体 padding 更舒服 */
+        @media (max-width: 640px) {
+          .pageWrap {
+            padding: 16px !important;
+          }
+
+          /* Header 上下堆叠 */
+          .pageHeader {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+
+          /* 两个按钮手机两列 */
+          .headerActions {
+            width: 100%;
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+          }
+
+          .actionBtn {
+            width: 100%;
+          }
+
+          /* Stats：2列 */
+          .statsGrid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+
+          /* onchain header：上下堆叠，右侧 pills/按钮换行 */
+          .onchainHeader {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+          .onchainActions {
+            justify-content: flex-start !important;
+          }
+
+          /* Tabs：横向滚动不挤压 */
+          .chipRow {
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            width: 100%;
+            padding-bottom: 6px;
+          }
+          .chipRow::-webkit-scrollbar {
+            height: 6px;
+          }
+        }
+
+        /* 平板：3列 */
+        @media (min-width: 641px) and (max-width: 1024px) {
+          .statsGrid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          }
+        }
+
+        /* 桌面：6列（你原样） */
+        @media (min-width: 1025px) {
+          .statsGrid {
+            grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+          }
+        }
+        /* ===== Mobile compact for Accounts / Recent activity (no structure change) ===== */
+        @media (max-width: 640px) {
+        /* details 内部卡片整体更紧凑 */
+        details > div {
+        gap: 10px !important;
+       }
+
+        /* Accounts / Recent 的每行：从左右变上下 */
+        .rowCard {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+        padding: 10px 12px !important;
+        }
+
+        /* 行内左侧内容（你已有 minWidth:0 的那个 div）确保可截断 */
+       .rowCard > div {
+        min-width: 0 !important;
+        }
+
+        /* 右侧 View 链接：手机端变按钮样式，避免挤压 */
+        .rowCard > a {
+        align-self: flex-end !important;
+        text-decoration: none !important;
+        font-weight: 950 !important;
+        font-size: 12px !important;
+        padding: 8px 10px !important;
+        border-radius: 12px !important;
+        border: 1px solid #e5e7eb !important;
+        background: #ffffff !important;
+      }
+
+         /* 代码块更像“标签”，并且不撑爆 */
+        .rowCard code {
+        display: inline-block !important;
+        max-width: 100% !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        padding: 2px 6px !important;
+        border-radius: 10px !important;
+        border: 1px solid #e5e7eb !important;
+        background: #f9fafb !important;
+       }
+      }
+
+      `}</style>
     </main>
   );
 }

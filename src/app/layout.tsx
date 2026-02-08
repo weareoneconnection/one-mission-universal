@@ -23,10 +23,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white text-gray-900`}>
         <Providers>
           <TopNav />
-          {children}
+
+          {/* ✅ 全站统一容器：手机不贴边、不留怪空白 */}
+          <main className="mx-auto w-full max-w-[1200px] px-4 sm:px-6 pb-10">
+            {children}
+          </main>
         </Providers>
       </body>
     </html>
