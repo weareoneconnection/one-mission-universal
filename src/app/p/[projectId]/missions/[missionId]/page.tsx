@@ -2,8 +2,6 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 
-/* ================= Types ================= */
-
 type Mission = {
   id: string;
   projectId: string;
@@ -23,15 +21,11 @@ type Proof = {
   currentStatus?: "PENDING" | "APPROVED" | "REJECTED" | "REVOKED";
 };
 
-/* ================= Utils ================= */
-
 function fmtShort(s: string, n = 6) {
   if (!s) return "";
   if (s.length <= n * 2 + 3) return s;
   return `${s.slice(0, n)}…${s.slice(-n)}`;
 }
-
-/* ================= Page ================= */
 
 export default function MissionsExplorePage() {
   const [loading, setLoading] = useState(true);
@@ -39,24 +33,22 @@ export default function MissionsExplorePage() {
   const [err, setErr] = useState<string | null>(null);
   const [activeOnly, setActiveOnly] = useState(true);
 
-  /* ---------- mobile detect ---------- */
+  // Mobile detect
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 640px)");
-    const apply = () => setIsMobile(mq.matches);
+    const apply = () => setIsMobile(!!mq.matches);
     apply();
     mq.addEventListener?.("change", apply);
     return () => mq.removeEventListener?.("change", apply);
   }, []);
 
-  /* ---------- wallet status ---------- */
-  const [wallet, setWallet] = useState("");
+  // wallet completion (optional)
+  const [wallet, setWallet] = useState<string>("");
   const [completed, setCompleted] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState<Set<string>>(new Set());
 
   const [q, setQ] = useState("");
-
-  /* ================= Load missions ================= */
 
   async function load() {
     setLoading(true);
@@ -78,7 +70,7 @@ export default function MissionsExplorePage() {
     load();
   }, [activeOnly]);
 
-  /* ---------- load wallet proofs ---------- */
+  // load wallet + proofs
   useEffect(() => {
     try {
       const w = String(localStorage.getItem("one_wallet") || "").trim();
@@ -86,32 +78,233 @@ export default function MissionsExplorePage() {
       if (!w) return;
 
       (async () => {
-        const pr = await fetch(`/api/profile/proofs?wallet=${encodeURIComponent(w)}`, {
-          cache: "no-store",
-        }).then((r) => r.json());
+        try {
+          const pr = await fetch(
+            `/api/profile/proofs?wallet=${encodeURIComponent(w)}`,
+            { cache: "no-store" }
+          ).then((r) => r.json());
 
-        const done = new Set<string>();
-        const pend = new Set<string>();
+          const list: Proof[] = Array.isArray(pr?.proofs) ? pr.proofs : [];
+          const done = new Set<string>();
+          const pend = new Set<string>();
 
-        for (const p of pr?.proofs || []) {
-          if (p.currentStatus === "APPROVED") done.add(p.missionId);
-          else if (p.currentStatus === "PENDING") pend.add(p.missionId);
+          for (const p of list) {
+            if (!p?.missionId) continue;
+            const mid = String(p.missionId);
+            if (p.currentStatus === "APPROVED") done.add(mid);
+            else if (p.currentStatus === "PENDING") pend.add(mid);
+          }
+          setCompleted(done);
+          setPending(pend);
+        } catch {
+          // ignore
         }
-
-        setCompleted(done);
-        setPending(pend);
       })();
-    } catch {}
+    } catch {
+      // ignore
+    }
   }, []);
 
-  /* ================= Derived ================= */
+  // styles (UI only)
+  const styles = useMemo(() => {
+    const touchH = 44; // ✅ unify all controls height for iOS
 
+    const page: React.CSSProperties = {
+      padding: isMobile ? 14 : 24,
+      maxWidth: 1100,
+      margin: "0 auto",
+      boxSizing: "border-box",
+      paddingBottom: 80,
+    };
+
+    const hero: React.CSSProperties = {
+      borderRadius: isMobile ? 18 : 22,
+      padding: isMobile ? 14 : 18,
+      border: "1px solid rgba(15,23,42,0.10)",
+      background:
+        "radial-gradient(900px 320px at 20% 0%, rgba(15,23,42,0.10), transparent), radial-gradient(700px 260px at 90% 20%, rgba(15,23,42,0.06), transparent), linear-gradient(#ffffff, #ffffff)",
+      boxShadow: "0 14px 45px rgba(15, 23, 42, 0.07)",
+      boxSizing: "border-box",
+    };
+
+    const h1: React.CSSProperties = {
+      fontSize: isMobile ? 26 : 34,
+      fontWeight: 950,
+      margin: 0,
+      letterSpacing: -0.3,
+      lineHeight: 1.05,
+      color: "#0f172a",
+    };
+
+    const sub: React.CSSProperties = {
+      marginTop: 8,
+      opacity: 0.78,
+      fontSize: 13,
+      lineHeight: 1.6,
+      color: "#334155",
+    };
+
+    const pill: React.CSSProperties = {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "6px 10px",
+      borderRadius: 999,
+      border: "1px solid rgba(15,23,42,0.12)",
+      fontSize: 12,
+      fontWeight: 950,
+      background: "#f8fafc",
+      color: "#0f172a",
+      whiteSpace: "nowrap",
+      boxSizing: "border-box",
+    };
+
+    // ✅ unify button alignment
+    const btn: React.CSSProperties = {
+      minHeight: touchH,
+      padding: "10px 14px",
+      borderRadius: 14,
+      border: "1px solid rgba(15,23,42,0.12)",
+      background: "white",
+      color: "#0f172a",
+      fontWeight: 950,
+      cursor: "pointer",
+      textDecoration: "none",
+      boxSizing: "border-box",
+
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      width: "100%",
+      WebkitTapHighlightColor: "transparent",
+    };
+
+    const btnPrimary: React.CSSProperties = {
+      ...btn,
+      border: "1px solid #0f172a",
+      background: "#0f172a",
+      color: "white",
+      boxShadow: "0 10px 22px rgba(15,23,42,0.18)",
+    };
+
+    // ✅ input same height as buttons
+    const input: React.CSSProperties = {
+      width: "100%",
+      minHeight: touchH,
+      boxSizing: "border-box",
+      padding: "10px 12px",
+      borderRadius: 14,
+      border: "1px solid rgba(15,23,42,0.14)",
+      outline: "none",
+      background: "white",
+      fontWeight: 750,
+      color: "#0f172a",
+    };
+
+    const errorBox: React.CSSProperties = {
+      marginTop: 12,
+      padding: 12,
+      borderRadius: 14,
+      border: "1px solid #fecaca",
+      background: "#fef2f2",
+      color: "#991b1b",
+      fontWeight: 900,
+      lineHeight: 1.5,
+      boxSizing: "border-box",
+    };
+
+    const card: React.CSSProperties = {
+      marginTop: 14,
+      padding: isMobile ? 12 : 14,
+      border: "1px solid rgba(15,23,42,0.10)",
+      borderRadius: 16,
+      background: "white",
+      boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)",
+      boxSizing: "border-box",
+    };
+
+    const foldWrap: React.CSSProperties = {
+      border: "1px solid rgba(15,23,42,0.10)",
+      borderRadius: 16,
+      overflow: "hidden",
+      background: "white",
+      boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)",
+      boxSizing: "border-box",
+    };
+
+    const foldBtn: React.CSSProperties = {
+      width: "100%",
+      textAlign: "left",
+      padding: isMobile ? 12 : 14,
+      border: "none",
+      background: "linear-gradient(#ffffff, #ffffff)",
+      cursor: "pointer",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "flex-start", // ✅ avoid vertical jitter
+      gap: 12,
+      boxSizing: "border-box",
+    };
+
+    const dot = (color: string): React.CSSProperties => ({
+      width: 8,
+      height: 8,
+      borderRadius: 999,
+      background: color,
+      display: "inline-block",
+      flex: "0 0 auto",
+    });
+
+    const statusPill = (bg: string, bd: string, fg: string): React.CSSProperties => ({
+      ...pill,
+      background: bg,
+      borderColor: bd,
+      color: fg,
+    });
+
+    // ✅ checkbox row styled like a control (same height)
+    const toggleRow: React.CSSProperties = {
+      ...btn,
+      justifyContent: "flex-start",
+      gap: 10,
+      padding: "10px 12px",
+    };
+
+    const checkbox: React.CSSProperties = {
+      width: 18,
+      height: 18,
+      flex: "0 0 auto",
+    };
+
+    return {
+      page,
+      hero,
+      h1,
+      sub,
+      pill,
+      btn,
+      btnPrimary,
+      input,
+      errorBox,
+      card,
+      foldWrap,
+      foldBtn,
+      dot,
+      statusPill,
+      toggleRow,
+      checkbox,
+    };
+  }, [isMobile]);
+
+  // group by project
   const filtered = useMemo(() => {
     const qq = q.trim().toLowerCase();
     if (!qq) return missions;
-    return missions.filter((m) =>
-      `${m.title} ${m.description || ""}`.toLowerCase().includes(qq)
-    );
+    return missions.filter((m) => {
+      const t = `${m.title || ""} ${m.description || ""}`.toLowerCase();
+      return t.includes(qq);
+    });
   }, [missions, q]);
 
   const byProject = useMemo(() => {
@@ -121,100 +314,125 @@ export default function MissionsExplorePage() {
       if (!map.has(pid)) map.set(pid, []);
       map.get(pid)!.push(m);
     }
-    return Array.from(map.entries());
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [filtered]);
 
-  /* ================= UI ================= */
+  // fold state per project
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (byProject.length === 0) return;
+    setOpenMap((prev) => {
+      if (Object.keys(prev).length > 0) return prev;
+      const first = byProject[0][0];
+      return { [first]: true };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [byProject.length]);
 
-  const styles = {
-    page: {
-      padding: isMobile ? 14 : 24,
-      maxWidth: 1100,
-      margin: "0 auto",
-      paddingBottom: 80,
-    },
-    hero: {
-      borderRadius: 20,
-      padding: isMobile ? 14 : 18,
-      border: "1px solid rgba(15,23,42,0.1)",
-      background: "#fff",
-      boxShadow: "0 12px 36px rgba(15,23,42,.08)",
-    },
-    h1: {
-      fontSize: isMobile ? 26 : 34,
-      fontWeight: 950,
-      margin: 0,
-    },
-    sub: {
-      marginTop: 8,
-      fontSize: 13,
-      opacity: 0.75,
-      lineHeight: 1.6,
-    },
-    pill: {
-      padding: "6px 10px",
-      borderRadius: 999,
-      border: "1px solid rgba(15,23,42,.12)",
-      fontSize: 12,
-      fontWeight: 900,
-      background: "#f8fafc",
-    },
-    btn: {
-      padding: "12px 14px",
-      borderRadius: 14,
-      border: "1px solid rgba(15,23,42,.12)",
-      background: "white",
-      fontWeight: 950,
-      textAlign: "center" as const,
-    },
-    btnPrimary: {
-      padding: "12px 14px",
-      borderRadius: 14,
-      background: "#0f172a",
-      color: "white",
-      fontWeight: 950,
-      textAlign: "center" as const,
-    },
-    input: {
-      width: "100%",
-      padding: "12px",
-      borderRadius: 14,
-      border: "1px solid rgba(15,23,42,.14)",
-      fontWeight: 700,
-    },
-    card: {
-      marginTop: 14,
-      padding: 14,
-      borderRadius: 16,
-      border: "1px solid rgba(15,23,42,.1)",
-      background: "white",
-    },
-    mission: {
-      padding: 14,
-      borderRadius: 16,
-      border: "1px solid rgba(15,23,42,.1)",
-      background: "#fff",
-    },
-  } as const;
+  const expandAll = () => {
+    const next: Record<string, boolean> = {};
+    for (const [pid] of byProject) next[pid] = true;
+    setOpenMap(next);
+  };
+  const collapseAll = () => {
+    const next: Record<string, boolean> = {};
+    for (const [pid] of byProject) next[pid] = false;
+    setOpenMap(next);
+  };
 
-  /* ================= Render ================= */
+  const renderMission = (m: Mission) => {
+    const isDone = completed.has(m.id);
+    const isPending = pending.has(m.id);
+
+    const status =
+      isDone
+        ? styles.statusPill("#f0fdf4", "#bbf7d0", "#166534")
+        : isPending
+        ? styles.statusPill("#fff7ed", "#fed7aa", "#9a3412")
+        : styles.pill;
+
+    const statusText = isDone ? "Completed" : isPending ? "Submitted" : "Not done";
+
+    return (
+      <div
+        key={m.id}
+        style={{
+          padding: isMobile ? 12 : 14,
+          border: "1px solid rgba(15,23,42,0.10)",
+          borderRadius: 16,
+          background: "rgba(255,255,255,0.96)",
+          boxShadow: "0 8px 22px rgba(15,23,42,0.05)",
+          boxSizing: "border-box",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ minWidth: 0, flex: "1 1 520px" }}>
+            <div style={{ fontSize: 15, fontWeight: 950, color: "#0f172a", lineHeight: 1.25 }}>
+              {m.title}
+            </div>
+
+            <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <span style={styles.pill}>
+                proof: <b>{m.proofType}</b>
+              </span>
+              <span style={styles.pill}>
+                weight: <b>{m.weight}</b>
+              </span>
+              <span
+                style={
+                  m.active
+                    ? styles.statusPill("#f0fdf4", "#bbf7d0", "#166534")
+                    : styles.statusPill("#fff7ed", "#fed7aa", "#9a3412")
+                }
+              >
+                <span style={styles.dot(m.active ? "#22c55e" : "#f97316")} />
+                {m.active ? "active" : "inactive"}
+              </span>
+              {wallet ? (
+                <span style={status}>
+                  {isDone ? "✓ " : ""}
+                  {statusText}
+                </span>
+              ) : (
+                <span style={styles.pill}>
+                  Connect wallet in{" "}
+                  <a href="/dashboard" style={{ fontWeight: 950, textDecoration: "underline", color: "#0f172a" }}>
+                    /dashboard
+                  </a>
+                </span>
+              )}
+            </div>
+
+            {m.description && (
+              <div style={{ marginTop: 10, fontSize: 14, color: "#0f172a", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+                {m.description}
+              </div>
+            )}
+          </div>
+
+          {/* ✅ CTA full width on mobile */}
+          <div style={{ width: isMobile ? "100%" : 220, display: "grid", gap: 10 }}>
+            <a href={`/missions/${m.id}`} style={isDone ? styles.btn : styles.btnPrimary}>
+              {isDone ? "Open" : "Start"}
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <main style={styles.page}>
-      {/* ---------- Hero ---------- */}
+      {/* Header */}
       <div style={styles.hero}>
         <h1 style={styles.h1}>Missions</h1>
         <div style={styles.sub}>
-          Browse missions across all projects. Clear CTA, mobile-first, scalable.
+          Browse missions across all projects. Clear CTA, scoped by wallet, and fold by project for scale.
         </div>
 
-        <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <span style={styles.pill}>
-            {loading ? "Loading…" : `${filtered.length} missions`}
-          </span>
-          <span style={styles.pill}>
-            wallet: {wallet ? fmtShort(wallet) : "not connected"}
-          </span>
+        <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <span style={styles.pill}>{loading ? "Loading…" : `${filtered.length} mission(s)`}</span>
+          {wallet ? <span style={styles.pill}>wallet: {fmtShort(wallet, 6)}</span> : <span style={styles.pill}>wallet: not connected</span>}
         </div>
 
         {/* Controls */}
@@ -222,18 +440,28 @@ export default function MissionsExplorePage() {
           style={{
             marginTop: 14,
             display: "grid",
-            gridTemplateColumns: isMobile ? "1fr 1fr" : "auto auto auto auto",
             gap: 10,
+            gridTemplateColumns: isMobile ? "1fr 1fr" : "auto auto auto auto auto",
+            alignItems: "stretch",
           }}
         >
-          <label style={{ gridColumn: isMobile ? "1 / -1" : undefined }}>
+          {/* ✅ checkbox row as a control */}
+          <label style={{ ...styles.toggleRow, gridColumn: isMobile ? "1 / -1" : undefined }}>
             <input
+              style={styles.checkbox}
               type="checkbox"
               checked={activeOnly}
               onChange={(e) => setActiveOnly(e.target.checked)}
-            />{" "}
-            Active only
+            />
+            <span style={{ fontWeight: 950, fontSize: 13, color: "#0f172a" }}>Active only</span>
           </label>
+
+          <button onClick={expandAll} style={styles.btn}>
+            Expand all
+          </button>
+          <button onClick={collapseAll} style={styles.btn}>
+            Collapse all
+          </button>
 
           <a href="/projects" style={styles.btn}>
             Projects
@@ -242,64 +470,76 @@ export default function MissionsExplorePage() {
             Dashboard
           </a>
 
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search missions"
-            style={{ ...styles.input, gridColumn: isMobile ? "1 / -1" : undefined }}
-          />
+          <div style={{ gridColumn: isMobile ? "1 / -1" : "auto", width: "100%" }}>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search mission title / description" style={styles.input} />
+          </div>
+        </div>
+
+        {/* Tips */}
+        <div style={styles.card}>
+          <div style={{ fontWeight: 950, color: "#0f172a" }}>Tips</div>
+          <div style={{ marginTop: 8, fontSize: 13, opacity: 0.75, color: "#334155", lineHeight: 1.7 }}>
+            • Use <b>Start</b> to open the mission page and submit proof.<br />
+            • <b>Submitted</b> = pending review.<br />
+            • <b>Completed</b> = approved (earned).<br />
+            • Fold by project keeps the library scalable.
+          </div>
         </div>
       </div>
 
-      {err && <div style={{ marginTop: 12, color: "#b91c1c" }}>{err}</div>}
+      {err && <div style={styles.errorBox}>{err}</div>}
 
-      {/* ---------- Missions ---------- */}
-      <div style={{ marginTop: 16, display: "grid", gap: 14 }}>
-        {byProject.map(([pid, list]) => (
-          <div key={pid} style={styles.card}>
-            <div style={{ fontWeight: 950, marginBottom: 10 }}>
-              Project {fmtShort(pid, 8)}
-            </div>
+      {/* Fold by project */}
+      <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
+        {loading ? (
+          <div style={{ opacity: 0.8 }}>Loading...</div>
+        ) : byProject.length === 0 ? (
+          <div style={{ opacity: 0.8 }}>No missions found.</div>
+        ) : (
+          byProject.map(([pid, list]) => {
+            const open = !!openMap[pid];
+            const activeCount = list.filter((m) => m.active).length;
 
-            <div style={{ display: "grid", gap: 12 }}>
-              {list.map((m) => {
-                const done = completed.has(m.id);
-                const pend = pending.has(m.id);
+            return (
+              <div key={pid} style={styles.foldWrap}>
+                <button
+                  onClick={() => setOpenMap((prev) => ({ ...prev, [pid]: !prev[pid] }))}
+                  style={styles.foldBtn}
+                >
+                  <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+                    <div style={{ fontWeight: 950, color: "#0f172a" }}>Project</div>
 
-                return (
-                  <div key={m.id} style={styles.mission}>
-                    <div style={{ fontWeight: 950 }}>{m.title}</div>
-
-                    {m.description && (
-                      <div style={{ marginTop: 6, fontSize: 13, opacity: 0.8 }}>
-                        {m.description}
-                      </div>
-                    )}
-
-                    <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <span style={styles.pill}>weight {m.weight}</span>
-                      <span style={styles.pill}>
-                        {done ? "✓ Completed" : pend ? "Submitted" : "Not done"}
-                      </span>
-                    </div>
-
-                    <a
-                      href={`/missions/${m.id}`}
+                    <div
                       style={{
-                        ...(done ? styles.btn : styles.btnPrimary),
-                        marginTop: 10,
-                        display: "block",
-                        width: "100%",
+                        marginTop: 6,
+                        fontSize: 14,
+                        fontWeight: 950,
+                        color: "#0f172a",
+                        wordBreak: "break-word",
+                        overflowWrap: "anywhere",
                       }}
                     >
-                      {done ? "Open" : "Start"}
-                    </a>
+                      {pid}
+                    </div>
+
+                    <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75, color: "#475569" }}>
+                      {list.length} mission(s) · {activeCount} active
+                    </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+
+                  {/* ✅ keep pill aligned, not stretching */}
+                  <span style={{ ...styles.pill, flex: "0 0 auto" }}>{open ? "Collapse" : "Expand"}</span>
+                </button>
+
+                {open && (
+                  <div style={{ padding: isMobile ? 12 : 14, borderTop: "1px solid rgba(15,23,42,0.08)" }}>
+                    <div style={{ display: "grid", gap: 12 }}>{list.map(renderMission)}</div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
       </div>
     </main>
   );
