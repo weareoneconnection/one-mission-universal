@@ -29,13 +29,15 @@ function safeUrl(u?: string) {
   const s = String(u || "").trim();
   if (!s) return "";
   if (s.startsWith("http://") || s.startsWith("https://")) return s;
-  // 容错：用户输入 example.com
   return `https://${s}`;
 }
 
 export default function ProjectsPage() {
   const { publicKey, connected } = useWallet();
   const ownerWallet = useMemo(() => publicKey?.toBase58() || "", [publicKey]);
+
+  const canEnter = connected && !!ownerWallet; // ✅ 不连接钱包：不能进入项目详情页（下一页）
+  const canCreate = canEnter; // ✅ 不连接钱包：不能创建项目
 
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -69,8 +71,8 @@ export default function ProjectsPage() {
     e.preventDefault();
     setErr(null);
 
-    if (!connected || !ownerWallet) {
-      setErr("Please connect your wallet first (owner).");
+    if (!canCreate) {
+      setErr("Please connect your wallet first (owner) in /dashboard.");
       return;
     }
 
@@ -101,7 +103,6 @@ export default function ProjectsPage() {
       setChain("solana");
       setContractAddress("");
 
-      // 创建后自动收起表单更“高级”
       setCreateOpen(false);
       await load();
     } catch (e: any) {
@@ -121,9 +122,15 @@ export default function ProjectsPage() {
     return { total, withWebsite, withContract, chains: chains.size };
   }, [projects]);
 
+  const disabledBtn =
+    "cursor-not-allowed border bg-gray-100 text-gray-400 shadow-none hover:bg-gray-100";
+  const activeGhost =
+    "rounded-2xl border bg-white px-4 py-3 text-center text-sm font-extrabold text-gray-900 hover:bg-gray-50";
+  const activePrimary =
+    "rounded-2xl bg-gray-900 px-4 py-3 text-center text-sm font-extrabold text-white hover:bg-black";
+
   return (
     <div className="min-h-[calc(100vh-64px)] bg-white">
-      {/* subtle background */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-gradient-to-b from-gray-50 to-transparent" />
 
       <main className="relative mx-auto max-w-6xl px-4 py-6 sm:py-10">
@@ -140,7 +147,7 @@ export default function ProjectsPage() {
                     Mobile-first
                   </span>
                   <span className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-gray-700">
-                    Clean · Scalable
+                    Gated by Wallet
                   </span>
                 </div>
 
@@ -148,17 +155,15 @@ export default function ProjectsPage() {
                   Projects
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">
-                  Create a project, set the owner wallet, then publish missions into One Mission Universal.
-                  Designed for <span className="font-semibold text-gray-900">mobile</span> and built for scale.
+                  Step 1: connect wallet. Step 2: create project. Step 3: open project details.
+                  <span className="font-semibold text-gray-900"> No direct mission creation here.</span>
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   <span className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-gray-700">
                     creator:{" "}
-                    {connected && ownerWallet ? (
-                      <span className="font-black text-gray-900">
-                        {short(ownerWallet, 8)}
-                      </span>
+                    {canEnter ? (
+                      <span className="font-black text-gray-900">{short(ownerWallet, 8)}</span>
                     ) : (
                       <span className="font-black text-red-600">not connected</span>
                     )}
@@ -171,9 +176,22 @@ export default function ProjectsPage() {
                     {stats.chains} chain(s)
                   </span>
                 </div>
+
+                {!canEnter && (
+                  <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
+                    Wallet not connected. You can browse the list, but{" "}
+                    <span className="font-black">cannot create projects</span> or{" "}
+                    <span className="font-black">open project details</span>.  
+                    Connect wallet in{" "}
+                    <a href="/dashboard" className="underline font-black text-gray-900">
+                      /dashboard
+                    </a>
+                    .
+                  </div>
+                )}
               </div>
 
-              {/* Actions */}
+              {/* Actions（这些不算“下一页”，可以保留） */}
               <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-cols-1">
                 <a
                   href="/missions"
@@ -196,7 +214,6 @@ export default function ProjectsPage() {
               </div>
             </div>
 
-            {/* Stats cards */}
             <div className="mt-6 grid gap-3 sm:grid-cols-4">
               <StatCard title="Total projects" value={loading ? "…" : String(stats.total)} />
               <StatCard title="With website" value={loading ? "…" : String(stats.withWebsite)} />
@@ -206,14 +223,13 @@ export default function ProjectsPage() {
           </div>
         </section>
 
-        {/* Error */}
         {err && (
           <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
             {err}
           </div>
         )}
 
-        {/* CREATE */}
+        {/* CREATE (wallet-gated) */}
         <section className="mt-6 rounded-3xl border bg-white shadow-sm">
           <button
             type="button"
@@ -223,7 +239,7 @@ export default function ProjectsPage() {
             <div className="min-w-0 text-left">
               <div className="text-sm font-extrabold text-gray-900">Create Project</div>
               <div className="mt-1 text-xs leading-relaxed text-gray-600">
-                Minimal inputs. Owner wallet is read from your connected wallet.
+                Owner wallet is read from your connected wallet.
               </div>
             </div>
             <span className="rounded-full border bg-white px-3 py-1 text-xs font-extrabold text-gray-900">
@@ -240,7 +256,11 @@ export default function ProjectsPage() {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="e.g. WAOC / My DAO / My App"
-                      className="w-full rounded-2xl border bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900/10"
+                      disabled={!canCreate}
+                      className={cn(
+                        "w-full rounded-2xl border bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900/10",
+                        !canCreate && "bg-gray-50 text-gray-400"
+                      )}
                     />
                   </Field>
 
@@ -249,7 +269,11 @@ export default function ProjectsPage() {
                       value={website}
                       onChange={(e) => setWebsite(e.target.value)}
                       placeholder="weareoneconnection.org"
-                      className="w-full rounded-2xl border bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900/10"
+                      disabled={!canCreate}
+                      className={cn(
+                        "w-full rounded-2xl border bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900/10",
+                        !canCreate && "bg-gray-50 text-gray-400"
+                      )}
                     />
                   </Field>
                 </div>
@@ -260,7 +284,11 @@ export default function ProjectsPage() {
                       value={chain}
                       onChange={(e) => setChain(e.target.value)}
                       placeholder="solana / bsc / ethereum ..."
-                      className="w-full rounded-2xl border bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900/10"
+                      disabled={!canCreate}
+                      className={cn(
+                        "w-full rounded-2xl border bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900/10",
+                        !canCreate && "bg-gray-50 text-gray-400"
+                      )}
                     />
                   </Field>
 
@@ -269,7 +297,11 @@ export default function ProjectsPage() {
                       value={contractAddress}
                       onChange={(e) => setContractAddress(e.target.value)}
                       placeholder="0x... / mint..."
-                      className="w-full rounded-2xl border bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900/10"
+                      disabled={!canCreate}
+                      className={cn(
+                        "w-full rounded-2xl border bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900/10",
+                        !canCreate && "bg-gray-50 text-gray-400"
+                      )}
                     />
                   </Field>
                 </div>
@@ -281,23 +313,23 @@ export default function ProjectsPage() {
                     placeholder="Connect wallet to fill"
                     className="w-full rounded-2xl border bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900 outline-none"
                   />
-                  {!connected && (
+                  {!canCreate && (
                     <div className="mt-2 text-xs text-gray-600">
                       Tip: connect wallet in{" "}
                       <a href="/dashboard" className="font-extrabold text-gray-900 underline">
                         /dashboard
-                      </a>
-                      .
+                      </a>{" "}
+                      to unlock project creation.
                     </div>
                   )}
                 </Field>
 
                 <button
                   type="submit"
-                  disabled={name.trim().length < 2}
+                  disabled={!canCreate || name.trim().length < 2}
                   className={cn(
                     "rounded-2xl px-4 py-3 text-center text-sm font-extrabold shadow-sm",
-                    name.trim().length < 2
+                    !canCreate || name.trim().length < 2
                       ? "cursor-not-allowed border bg-gray-100 text-gray-500"
                       : "bg-gray-900 text-white hover:bg-black"
                   )}
@@ -315,7 +347,7 @@ export default function ProjectsPage() {
             <div>
               <div className="text-sm font-extrabold text-gray-900">All Projects</div>
               <div className="mt-1 text-xs text-gray-600">
-                Tap a project to open details or manage missions.
+                Next step is project details. Mission management happens inside the project.
               </div>
             </div>
             <div className="text-xs font-semibold text-gray-600">
@@ -342,8 +374,12 @@ export default function ProjectsPage() {
                       <div className="text-base font-black text-gray-900">{p.name}</div>
 
                       <div className="mt-2 flex flex-wrap gap-2">
-                        <Badge>chain: <b className="ml-1">{String(p.chain || "-")}</b></Badge>
-                        <Badge>slug: <b className="ml-1">{p.slug}</b></Badge>
+                        <Badge>
+                          chain: <b className="ml-1">{String(p.chain || "-")}</b>
+                        </Badge>
+                        <Badge>
+                          slug: <b className="ml-1">{p.slug}</b>
+                        </Badge>
                         {p.website ? <Badge>website</Badge> : <Badge muted>no website</Badge>}
                         {(p as any).contractAddress ? <Badge>contract</Badge> : <Badge muted>no contract</Badge>}
                       </div>
@@ -381,27 +417,26 @@ export default function ProjectsPage() {
                       )}
                     </div>
 
-                    <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-cols-1">
-                      <a
-                        href={`/projects/${p.id}`}
-                        className="rounded-2xl border bg-white px-4 py-3 text-center text-sm font-extrabold text-gray-900 hover:bg-gray-50"
-                      >
-                        Open
-                      </a>
-                      <a
-                        href={`/projects/${p.id}/missions`}
-                        className="rounded-2xl bg-gray-900 px-4 py-3 text-center text-sm font-extrabold text-white hover:bg-black"
-                      >
-                        Manage Missions
-                      </a>
+                    {/* ✅ 只允许进入项目详情页；未连接钱包 => 禁用 */}
+                    <div className="grid w-full grid-cols-1 gap-2 sm:w-auto">
+                      {canEnter ? (
+                        <a href={`/projects/${p.id}`} className={activePrimary}>
+                          Open Project
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setErr("Connect wallet first in /dashboard to open project details.")}
+                          className={cn("rounded-2xl px-4 py-3 text-center text-sm font-extrabold", disabledBtn)}
+                        >
+                          Open Project (Locked)
+                        </button>
+                      )}
 
-                      {/* 你有 admin review 路由的话，这里给一个更“高级”的入口（不影响结构） */}
-                      <a
-                        href={`/p/${p.id}/admin/reviews`}
-                        className="col-span-2 rounded-2xl border bg-white px-4 py-3 text-center text-sm font-extrabold text-gray-900 hover:bg-gray-50 sm:col-span-1"
-                      >
-                        Admin Reviews
-                      </a>
+                      {/* ✅ 不再提供这里直达 missions/admin 的入口（你要求的流程） */}
+                      <div className="rounded-2xl border bg-gray-50 px-4 py-3 text-xs font-semibold text-gray-600">
+                        Next: open details → manage missions inside.
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -410,20 +445,14 @@ export default function ProjectsPage() {
           </div>
         </section>
 
-        {/* Mobile sticky quick actions (高级感 + 方便) */}
+        {/* Mobile sticky quick actions */}
         <div className="sticky bottom-3 mt-8 sm:hidden">
           <div className="rounded-3xl border bg-white p-2 shadow-sm">
             <div className="grid grid-cols-2 gap-2">
-              <a
-                href="/missions"
-                className="rounded-2xl bg-gray-900 px-4 py-3 text-center text-sm font-extrabold text-white"
-              >
+              <a href="/missions" className="rounded-2xl bg-gray-900 px-4 py-3 text-center text-sm font-extrabold text-white">
                 Missions
               </a>
-              <a
-                href="/dashboard"
-                className="rounded-2xl border bg-white px-4 py-3 text-center text-sm font-extrabold text-gray-900"
-              >
+              <a href="/dashboard" className="rounded-2xl border bg-white px-4 py-3 text-center text-sm font-extrabold text-gray-900">
                 Dashboard
               </a>
             </div>
@@ -478,7 +507,7 @@ function SkeletonCard() {
       </div>
       <div className="mt-4 h-3 w-3/4 animate-pulse rounded bg-gray-200" />
       <div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-gray-200" />
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      <div className="mt-4 grid grid-cols-1 gap-2">
         <div className="h-10 animate-pulse rounded-2xl bg-gray-200" />
         <div className="h-10 animate-pulse rounded-2xl bg-gray-200" />
       </div>
