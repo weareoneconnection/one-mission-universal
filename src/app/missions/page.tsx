@@ -473,7 +473,8 @@ export default function MissionsExplorePage() {
                         text = "Connect wallet";
                       }
 
-                      const href = `/missions/${m.id}`;
+                      const href = `/p/${encodeURIComponent(m.projectId)}/missions/${encodeURIComponent(m.id)}`;
+
 
                       return (
                         <div key={m.id} style={missionCard}>

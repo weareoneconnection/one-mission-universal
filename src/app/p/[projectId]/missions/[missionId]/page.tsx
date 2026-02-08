@@ -1,6 +1,10 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useWallet } from "@solana/wallet-adapter-react";
+import bs58 from "bs58";
+import { buildProofMessage, randomNonce } from "@/lib/proofs/message";
 
 type Mission = {
   id: string;
@@ -14,51 +18,81 @@ type Mission = {
   updatedAt: number;
 };
 
-type Proof = {
-  id: string;
+type ProofDraft = {
+  version: 1;
   missionId: string;
   projectId: string;
-  currentStatus?: "PENDING" | "APPROVED" | "REJECTED" | "REVOKED";
+  wallet: string;
+  proofType: "SIGN_MESSAGE";
+  message: string;
+  signature: string; // base58
+  nonce: string;
+  issuedAt: number;
+  domain: string;
 };
 
-function fmtShort(s: string, n = 6) {
-  if (!s) return "";
-  if (s.length <= n * 2 + 3) return s;
-  return `${s.slice(0, n)}…${s.slice(-n)}`;
+function draftKey(projectId: string, missionId: string, wallet: string) {
+  return `proof_draft:v1:${projectId}:${missionId}:${wallet}`;
 }
 
-export default function MissionsExplorePage() {
+function loadDraft(projectId: string, missionId: string, wallet: string): ProofDraft | null {
+  if (!projectId || !missionId || !wallet) return null;
+  try {
+    const raw = localStorage.getItem(draftKey(projectId, missionId, wallet));
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj?.missionId || !obj?.wallet || !obj?.projectId) return null;
+    return obj as ProofDraft;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(d: ProofDraft) {
+  localStorage.setItem(draftKey(d.projectId, d.missionId, d.wallet), JSON.stringify(d));
+}
+
+function clearDraft(projectId: string, missionId: string, wallet: string) {
+  localStorage.removeItem(draftKey(projectId, missionId, wallet));
+}
+
+export default function MissionDetailPage() {
+  const params = useParams<{ projectId: string; missionId: string }>();
+  const router = useRouter();
+
+  const projectId = String(params?.projectId || "");
+  const missionId = String(params?.missionId || "");
+
+  const { publicKey, signMessage, connected } = useWallet();
+  const walletStr = useMemo(() => (publicKey ? publicKey.toBase58() : ""), [publicKey]);
+
   const [loading, setLoading] = useState(true);
-  const [missions, setMissions] = useState<Mission[]>([]);
+  const [m, setM] = useState<Mission | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [activeOnly, setActiveOnly] = useState(true);
 
-  // Mobile detect
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 640px)");
-    const apply = () => setIsMobile(!!mq.matches);
-    apply();
-    mq.addEventListener?.("change", apply);
-    return () => mq.removeEventListener?.("change", apply);
-  }, []);
+  const [draft, setDraft] = useState<ProofDraft | null>(null);
 
-  // wallet completion (optional)
-  const [wallet, setWallet] = useState<string>("");
-  const [completed, setCompleted] = useState<Set<string>>(new Set());
-  const [pending, setPending] = useState<Set<string>>(new Set());
+  const [signing, setSigning] = useState(false);
+  const [uiMsg, setUiMsg] = useState<string | null>(null);
 
-  const [q, setQ] = useState("");
-
-  async function load() {
+  async function loadMission() {
+    if (!missionId) return;
     setLoading(true);
     setErr(null);
     try {
-      const qs = activeOnly ? "?active=1" : "";
-      const res = await fetch(`/api/missions${qs}`, { cache: "no-store" });
+      // 先继续复用你现有 /api/missions（全局列表），后续你可以换成 /api/projects/[projectId]/missions
+      const res = await fetch("/api/missions", { cache: "no-store" });
       const data = await res.json();
       if (!data?.ok) throw new Error(data?.error || "Failed to load missions");
-      setMissions(Array.isArray(data.missions) ? data.missions : []);
+
+      const found = (data.missions as Mission[]).find((x) => x.id === missionId) || null;
+
+      if (!found) throw new Error("Mission not found");
+      if (found.projectId !== projectId) {
+        throw new Error(`Project mismatch. URL=${projectId}, mission.projectId=${found.projectId}`);
+      }
+
+      setM(found);
     } catch (e: any) {
       setErr(String(e?.message || e));
     } finally {
@@ -66,481 +100,313 @@ export default function MissionsExplorePage() {
     }
   }
 
+  // load mission
   useEffect(() => {
-    load();
-  }, [activeOnly]);
-
-  // load wallet + proofs
-  useEffect(() => {
-    try {
-      const w = String(localStorage.getItem("one_wallet") || "").trim();
-      setWallet(w);
-      if (!w) return;
-
-      (async () => {
-        try {
-          const pr = await fetch(
-            `/api/profile/proofs?wallet=${encodeURIComponent(w)}`,
-            { cache: "no-store" }
-          ).then((r) => r.json());
-
-          const list: Proof[] = Array.isArray(pr?.proofs) ? pr.proofs : [];
-          const done = new Set<string>();
-          const pend = new Set<string>();
-
-          for (const p of list) {
-            if (!p?.missionId) continue;
-            const mid = String(p.missionId);
-            if (p.currentStatus === "APPROVED") done.add(mid);
-            else if (p.currentStatus === "PENDING") pend.add(mid);
-          }
-          setCompleted(done);
-          setPending(pend);
-        } catch {
-          // ignore
-        }
-      })();
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  // styles (UI only)
-  const styles = useMemo(() => {
-    const touchH = 44; // ✅ unify all controls height for iOS
-
-    const page: React.CSSProperties = {
-      padding: isMobile ? 14 : 24,
-      maxWidth: 1100,
-      margin: "0 auto",
-      boxSizing: "border-box",
-      paddingBottom: 80,
-    };
-
-    const hero: React.CSSProperties = {
-      borderRadius: isMobile ? 18 : 22,
-      padding: isMobile ? 14 : 18,
-      border: "1px solid rgba(15,23,42,0.10)",
-      background:
-        "radial-gradient(900px 320px at 20% 0%, rgba(15,23,42,0.10), transparent), radial-gradient(700px 260px at 90% 20%, rgba(15,23,42,0.06), transparent), linear-gradient(#ffffff, #ffffff)",
-      boxShadow: "0 14px 45px rgba(15, 23, 42, 0.07)",
-      boxSizing: "border-box",
-    };
-
-    const h1: React.CSSProperties = {
-      fontSize: isMobile ? 26 : 34,
-      fontWeight: 950,
-      margin: 0,
-      letterSpacing: -0.3,
-      lineHeight: 1.05,
-      color: "#0f172a",
-    };
-
-    const sub: React.CSSProperties = {
-      marginTop: 8,
-      opacity: 0.78,
-      fontSize: 13,
-      lineHeight: 1.6,
-      color: "#334155",
-    };
-
-    const pill: React.CSSProperties = {
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 8,
-      padding: "6px 10px",
-      borderRadius: 999,
-      border: "1px solid rgba(15,23,42,0.12)",
-      fontSize: 12,
-      fontWeight: 950,
-      background: "#f8fafc",
-      color: "#0f172a",
-      whiteSpace: "nowrap",
-      boxSizing: "border-box",
-    };
-
-    // ✅ unify button alignment
-    const btn: React.CSSProperties = {
-      minHeight: touchH,
-      padding: "10px 14px",
-      borderRadius: 14,
-      border: "1px solid rgba(15,23,42,0.12)",
-      background: "white",
-      color: "#0f172a",
-      fontWeight: 950,
-      cursor: "pointer",
-      textDecoration: "none",
-      boxSizing: "border-box",
-
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 8,
-      width: "100%",
-      WebkitTapHighlightColor: "transparent",
-    };
-
-    const btnPrimary: React.CSSProperties = {
-      ...btn,
-      border: "1px solid #0f172a",
-      background: "#0f172a",
-      color: "white",
-      boxShadow: "0 10px 22px rgba(15,23,42,0.18)",
-    };
-
-    // ✅ input same height as buttons
-    const input: React.CSSProperties = {
-      width: "100%",
-      minHeight: touchH,
-      boxSizing: "border-box",
-      padding: "10px 12px",
-      borderRadius: 14,
-      border: "1px solid rgba(15,23,42,0.14)",
-      outline: "none",
-      background: "white",
-      fontWeight: 750,
-      color: "#0f172a",
-    };
-
-    const errorBox: React.CSSProperties = {
-      marginTop: 12,
-      padding: 12,
-      borderRadius: 14,
-      border: "1px solid #fecaca",
-      background: "#fef2f2",
-      color: "#991b1b",
-      fontWeight: 900,
-      lineHeight: 1.5,
-      boxSizing: "border-box",
-    };
-
-    const card: React.CSSProperties = {
-      marginTop: 14,
-      padding: isMobile ? 12 : 14,
-      border: "1px solid rgba(15,23,42,0.10)",
-      borderRadius: 16,
-      background: "white",
-      boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)",
-      boxSizing: "border-box",
-    };
-
-    const foldWrap: React.CSSProperties = {
-      border: "1px solid rgba(15,23,42,0.10)",
-      borderRadius: 16,
-      overflow: "hidden",
-      background: "white",
-      boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)",
-      boxSizing: "border-box",
-    };
-
-    const foldBtn: React.CSSProperties = {
-      width: "100%",
-      textAlign: "left",
-      padding: isMobile ? 12 : 14,
-      border: "none",
-      background: "linear-gradient(#ffffff, #ffffff)",
-      cursor: "pointer",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "flex-start", // ✅ avoid vertical jitter
-      gap: 12,
-      boxSizing: "border-box",
-    };
-
-    const dot = (color: string): React.CSSProperties => ({
-      width: 8,
-      height: 8,
-      borderRadius: 999,
-      background: color,
-      display: "inline-block",
-      flex: "0 0 auto",
-    });
-
-    const statusPill = (bg: string, bd: string, fg: string): React.CSSProperties => ({
-      ...pill,
-      background: bg,
-      borderColor: bd,
-      color: fg,
-    });
-
-    // ✅ checkbox row styled like a control (same height)
-    const toggleRow: React.CSSProperties = {
-      ...btn,
-      justifyContent: "flex-start",
-      gap: 10,
-      padding: "10px 12px",
-    };
-
-    const checkbox: React.CSSProperties = {
-      width: 18,
-      height: 18,
-      flex: "0 0 auto",
-    };
-
-    return {
-      page,
-      hero,
-      h1,
-      sub,
-      pill,
-      btn,
-      btnPrimary,
-      input,
-      errorBox,
-      card,
-      foldWrap,
-      foldBtn,
-      dot,
-      statusPill,
-      toggleRow,
-      checkbox,
-    };
-  }, [isMobile]);
-
-  // group by project
-  const filtered = useMemo(() => {
-    const qq = q.trim().toLowerCase();
-    if (!qq) return missions;
-    return missions.filter((m) => {
-      const t = `${m.title || ""} ${m.description || ""}`.toLowerCase();
-      return t.includes(qq);
-    });
-  }, [missions, q]);
-
-  const byProject = useMemo(() => {
-    const map = new Map<string, Mission[]>();
-    for (const m of filtered) {
-      const pid = String(m.projectId || "unknown");
-      if (!map.has(pid)) map.set(pid, []);
-      map.get(pid)!.push(m);
-    }
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [filtered]);
-
-  // fold state per project
-  const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
-  useEffect(() => {
-    if (byProject.length === 0) return;
-    setOpenMap((prev) => {
-      if (Object.keys(prev).length > 0) return prev;
-      const first = byProject[0][0];
-      return { [first]: true };
-    });
+    setUiMsg(null);
+    loadMission();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [byProject.length]);
+  }, [projectId, missionId]);
 
-  const expandAll = () => {
-    const next: Record<string, boolean> = {};
-    for (const [pid] of byProject) next[pid] = true;
-    setOpenMap(next);
-  };
-  const collapseAll = () => {
-    const next: Record<string, boolean> = {};
-    for (const [pid] of byProject) next[pid] = false;
-    setOpenMap(next);
-  };
+  // load draft when wallet or mission changes
+  useEffect(() => {
+    setUiMsg(null);
+    if (!projectId || !missionId || !walletStr) {
+      setDraft(null);
+      return;
+    }
+    const d = loadDraft(projectId, missionId, walletStr);
+    setDraft(d);
+  }, [projectId, missionId, walletStr]);
 
-  const renderMission = (m: Mission) => {
-    const isDone = completed.has(m.id);
-    const isPending = pending.has(m.id);
+  const isSigned = !!draft?.signature;
 
-    const status =
-      isDone
-        ? styles.statusPill("#f0fdf4", "#bbf7d0", "#166534")
-        : isPending
-        ? styles.statusPill("#fff7ed", "#fed7aa", "#9a3412")
-        : styles.pill;
+  async function onSign() {
+    setUiMsg(null);
 
-    const statusText = isDone ? "Completed" : isPending ? "Submitted" : "Not done";
+    if (!m) return;
+    if (!m.active) return setUiMsg("This mission is inactive.");
+    if (!connected || !publicKey) return setUiMsg("Wallet not connected.");
+    if (!signMessage) return setUiMsg("Wallet does not support signMessage.");
 
+    setSigning(true);
+    try {
+      const issuedAt = Date.now();
+      const nonce = randomNonce();
+      const domain = typeof window !== "undefined" ? window.location.host : "unknown";
+
+      const message = buildProofMessage({
+        domain,
+        wallet: walletStr,
+        projectId: m.projectId,
+        missionId: m.id,
+        missionTitle: m.title,
+        issuedAt,
+        nonce,
+      });
+
+      const msgBytes = new TextEncoder().encode(message);
+      const sigBytes = await signMessage(msgBytes);
+      const signature = bs58.encode(sigBytes);
+
+      const nextDraft: ProofDraft = {
+        version: 1,
+        missionId: m.id,
+        projectId: m.projectId,
+        wallet: walletStr,
+        proofType: "SIGN_MESSAGE",
+        message,
+        signature,
+        nonce,
+        issuedAt,
+        domain,
+      };
+
+      saveDraft(nextDraft);
+      setDraft(nextDraft);
+      setUiMsg("✅ Signed. Continue to submit proof for review.");
+    } catch (e: any) {
+      setUiMsg(`❌ Sign failed: ${String(e?.message || e)}`);
+    } finally {
+      setSigning(false);
+    }
+  }
+
+  function onGoSubmit() {
+    setUiMsg(null);
+
+    if (!m) return;
+    if (!m.active) return setUiMsg("This mission is inactive.");
+    if (!connected || !publicKey) return setUiMsg("Wallet not connected.");
+
+    if (!draft?.signature || !draft?.message) {
+      return setUiMsg("Please sign first.");
+    }
+
+    router.push(`/p/${projectId}/missions/${missionId}/submit`);
+  }
+
+  function onClearDraft() {
+    setUiMsg(null);
+    if (!projectId || !missionId || !walletStr) return;
+    clearDraft(projectId, missionId, walletStr);
+    setDraft(null);
+    setUiMsg("Draft cleared.");
+  }
+
+  if (!projectId || !missionId) {
     return (
-      <div
-        key={m.id}
-        style={{
-          padding: isMobile ? 12 : 14,
-          border: "1px solid rgba(15,23,42,0.10)",
-          borderRadius: 16,
-          background: "rgba(255,255,255,0.96)",
-          boxShadow: "0 8px 22px rgba(15,23,42,0.05)",
-          boxSizing: "border-box",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-          <div style={{ minWidth: 0, flex: "1 1 520px" }}>
-            <div style={{ fontSize: 15, fontWeight: 950, color: "#0f172a", lineHeight: 1.25 }}>
-              {m.title}
-            </div>
-
-            <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <span style={styles.pill}>
-                proof: <b>{m.proofType}</b>
-              </span>
-              <span style={styles.pill}>
-                weight: <b>{m.weight}</b>
-              </span>
-              <span
-                style={
-                  m.active
-                    ? styles.statusPill("#f0fdf4", "#bbf7d0", "#166534")
-                    : styles.statusPill("#fff7ed", "#fed7aa", "#9a3412")
-                }
-              >
-                <span style={styles.dot(m.active ? "#22c55e" : "#f97316")} />
-                {m.active ? "active" : "inactive"}
-              </span>
-              {wallet ? (
-                <span style={status}>
-                  {isDone ? "✓ " : ""}
-                  {statusText}
-                </span>
-              ) : (
-                <span style={styles.pill}>
-                  Connect wallet in{" "}
-                  <a href="/dashboard" style={{ fontWeight: 950, textDecoration: "underline", color: "#0f172a" }}>
-                    /dashboard
-                  </a>
-                </span>
-              )}
-            </div>
-
-            {m.description && (
-              <div style={{ marginTop: 10, fontSize: 14, color: "#0f172a", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
-                {m.description}
-              </div>
-            )}
-          </div>
-
-          {/* ✅ CTA full width on mobile */}
-          <div style={{ width: isMobile ? "100%" : 220, display: "grid", gap: 10 }}>
-            <a href={`/missions/${m.id}`} style={isDone ? styles.btn : styles.btnPrimary}>
-              {isDone ? "Open" : "Start"}
-            </a>
-          </div>
+      <main style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
+        <h1 style={{ fontSize: 22, fontWeight: 900 }}>Missing params</h1>
+        <div style={{ marginTop: 10, opacity: 0.75 }}>
+          projectId: <code>{projectId || "(missing)"}</code> · missionId: <code>{missionId || "(missing)"}</code>
         </div>
-      </div>
+        <a href="/missions" style={{ textDecoration: "underline" }}>
+          Back
+        </a>
+      </main>
     );
-  };
+  }
+
+  if (loading) {
+    return (
+      <main style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
+        <h1 style={{ fontSize: 22, fontWeight: 900 }}>Loading...</h1>
+      </main>
+    );
+  }
+
+  if (err) {
+    return (
+      <main style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
+        <h1 style={{ fontSize: 22, fontWeight: 900 }}>Error</h1>
+        <div style={{ marginTop: 8, color: "#b91c1c" }}>{err}</div>
+        <div style={{ marginTop: 16 }}>
+          <a href="/missions" style={{ textDecoration: "underline" }}>
+            Back
+          </a>
+        </div>
+      </main>
+    );
+  }
+
+  if (!m) {
+    return (
+      <main style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
+        <h1 style={{ fontSize: 26, fontWeight: 950 }}>Mission not found</h1>
+        <div style={{ marginTop: 8, opacity: 0.7 }}>
+          missionId: <code>{missionId}</code>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <a href="/missions" style={{ textDecoration: "underline" }}>
+            Back
+          </a>
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <main style={styles.page}>
-      {/* Header */}
-      <div style={styles.hero}>
-        <h1 style={styles.h1}>Missions</h1>
-        <div style={styles.sub}>
-          Browse missions across all projects. Clear CTA, scoped by wallet, and fold by project for scale.
-        </div>
-
-        <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <span style={styles.pill}>{loading ? "Loading…" : `${filtered.length} mission(s)`}</span>
-          {wallet ? <span style={styles.pill}>wallet: {fmtShort(wallet, 6)}</span> : <span style={styles.pill}>wallet: not connected</span>}
-        </div>
-
-        {/* Controls */}
-        <div
-          style={{
-            marginTop: 14,
-            display: "grid",
-            gap: 10,
-            gridTemplateColumns: isMobile ? "1fr 1fr" : "auto auto auto auto auto",
-            alignItems: "stretch",
-          }}
-        >
-          {/* ✅ checkbox row as a control */}
-          <label style={{ ...styles.toggleRow, gridColumn: isMobile ? "1 / -1" : undefined }}>
-            <input
-              style={styles.checkbox}
-              type="checkbox"
-              checked={activeOnly}
-              onChange={(e) => setActiveOnly(e.target.checked)}
-            />
-            <span style={{ fontWeight: 950, fontSize: 13, color: "#0f172a" }}>Active only</span>
-          </label>
-
-          <button onClick={expandAll} style={styles.btn}>
-            Expand all
-          </button>
-          <button onClick={collapseAll} style={styles.btn}>
-            Collapse all
-          </button>
-
-          <a href="/projects" style={styles.btn}>
-            Projects
-          </a>
-          <a href="/dashboard" style={styles.btn}>
-            Dashboard
-          </a>
-
-          <div style={{ gridColumn: isMobile ? "1 / -1" : "auto", width: "100%" }}>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search mission title / description" style={styles.input} />
+    <main style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
+      <header style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+        <div>
+          <h1 style={{ fontSize: 28, fontWeight: 950 }}>{m.title}</h1>
+          <div style={{ marginTop: 6, fontSize: 13, opacity: 0.75 }}>
+            missionId: {m.id} · projectId: {m.projectId} · proof: {m.proofType} · weight: {m.weight} ·{" "}
+            {m.active ? "active" : "inactive"}
           </div>
         </div>
 
-        {/* Tips */}
-        <div style={styles.card}>
-          <div style={{ fontWeight: 950, color: "#0f172a" }}>Tips</div>
-          <div style={{ marginTop: 8, fontSize: 13, opacity: 0.75, color: "#334155", lineHeight: 1.7 }}>
-            • Use <b>Start</b> to open the mission page and submit proof.<br />
-            • <b>Submitted</b> = pending review.<br />
-            • <b>Completed</b> = approved (earned).<br />
-            • Fold by project keeps the library scalable.
-          </div>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <a href={`/p/${projectId}/missions`} style={{ textDecoration: "underline" }}>
+            Project Missions
+          </a>
+          <button
+            type="button"
+            onClick={loadMission}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: "1px solid #e5e7eb",
+              background: "white",
+              cursor: "pointer",
+              fontWeight: 800,
+            }}
+          >
+            Refresh
+          </button>
         </div>
-      </div>
+      </header>
 
-      {err && <div style={styles.errorBox}>{err}</div>}
+      {m.description && (
+        <section style={{ marginTop: 16, padding: 14, border: "1px solid #e5e7eb", borderRadius: 12 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 800 }}>Description</h2>
+          <div style={{ marginTop: 8, opacity: 0.9 }}>{m.description}</div>
+        </section>
+      )}
 
-      {/* Fold by project */}
-      <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
-        {loading ? (
-          <div style={{ opacity: 0.8 }}>Loading...</div>
-        ) : byProject.length === 0 ? (
-          <div style={{ opacity: 0.8 }}>No missions found.</div>
-        ) : (
-          byProject.map(([pid, list]) => {
-            const open = !!openMap[pid];
-            const activeCount = list.filter((m) => m.active).length;
+      <section style={{ marginTop: 16, padding: 14, border: "1px solid #e5e7eb", borderRadius: 12 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 800 }}>Proof</h2>
 
-            return (
-              <div key={pid} style={styles.foldWrap}>
-                <button
-                  onClick={() => setOpenMap((prev) => ({ ...prev, [pid]: !prev[pid] }))}
-                  style={styles.foldBtn}
-                >
-                  <div style={{ minWidth: 0, flex: "1 1 auto" }}>
-                    <div style={{ fontWeight: 950, color: "#0f172a" }}>Project</div>
+        <div style={{ marginTop: 8, opacity: 0.85, lineHeight: 1.7 }}>
+          Wallet:{" "}
+          {walletStr ? (
+            <span style={{ fontFamily: "monospace" }}>{walletStr}</span>
+          ) : (
+            <span style={{ color: "#b91c1c" }}>not connected</span>
+          )}
+          <br />
+          Proof type: <b>SIGN_MESSAGE</b>
+          <br />
+          Flow: <b>Sign</b> → <b>Submit Evidence</b> → <b>Project Approval</b> → <b>Points</b>
+        </div>
 
-                    <div
-                      style={{
-                        marginTop: 6,
-                        fontSize: 14,
-                        fontWeight: 950,
-                        color: "#0f172a",
-                        wordBreak: "break-word",
-                        overflowWrap: "anywhere",
-                      }}
-                    >
-                      {pid}
-                    </div>
+        <div style={{ marginTop: 10, fontWeight: 800 }}>
+          Draft status:{" "}
+          <span style={{ color: isSigned ? "#16a34a" : "#b45309" }}>
+            {isSigned ? "signed" : "not signed yet"}
+          </span>
+        </div>
 
-                    <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75, color: "#475569" }}>
-                      {list.length} mission(s) · {activeCount} active
-                    </div>
-                  </div>
+        <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={onSign}
+            disabled={signing || !walletStr}
+            style={{
+              padding: "12px 14px",
+              borderRadius: 12,
+              border: "1px solid #111827",
+              background: "#111827",
+              color: "white",
+              fontWeight: 900,
+              cursor: signing || !walletStr ? "not-allowed" : "pointer",
+              opacity: signing || !walletStr ? 0.6 : 1,
+            }}
+          >
+            {signing ? "Signing..." : "Sign Message"}
+          </button>
 
-                  {/* ✅ keep pill aligned, not stretching */}
-                  <span style={{ ...styles.pill, flex: "0 0 auto" }}>{open ? "Collapse" : "Expand"}</span>
-                </button>
+          <button
+            type="button"
+            onClick={onGoSubmit}
+            disabled={!walletStr || !isSigned}
+            style={{
+              padding: "12px 14px",
+              borderRadius: 12,
+              border: "2px solid #111827",
+              background: "white",
+              color: "#111827",
+              fontWeight: 900,
+              cursor: !walletStr || !isSigned ? "not-allowed" : "pointer",
+              opacity: !walletStr || !isSigned ? 0.6 : 1,
+            }}
+          >
+            Review & Submit
+          </button>
 
-                {open && (
-                  <div style={{ padding: isMobile ? 12 : 14, borderTop: "1px solid rgba(15,23,42,0.08)" }}>
-                    <div style={{ display: "grid", gap: 12 }}>{list.map(renderMission)}</div>
-                  </div>
-                )}
-              </div>
-            );
-          })
+          <button
+            type="button"
+            onClick={onClearDraft}
+            style={{
+              padding: "12px 14px",
+              borderRadius: 12,
+              border: "1px solid #e5e7eb",
+              background: "white",
+              fontWeight: 900,
+              cursor: "pointer",
+            }}
+          >
+            Clear Draft
+          </button>
+
+          <a
+            href="/profile"
+            style={{
+              padding: "12px 14px",
+              borderRadius: 12,
+              border: "1px solid #e5e7eb",
+              textDecoration: "none",
+              fontWeight: 900,
+              color: "#111827",
+            }}
+          >
+            View Profile
+          </a>
+        </div>
+
+        {uiMsg && <div style={{ marginTop: 12, fontWeight: 800 }}>{uiMsg}</div>}
+
+        {draft?.message && (
+          <details style={{ marginTop: 14 }}>
+            <summary style={{ cursor: "pointer", fontWeight: 900 }}>View signed message</summary>
+            <pre
+              style={{
+                marginTop: 10,
+                padding: 12,
+                borderRadius: 12,
+                border: "1px solid #e5e7eb",
+                background: "#fafafa",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                fontSize: 12,
+                lineHeight: 1.5,
+              }}
+            >
+              {draft.message}
+              {"\n\n"}
+              Signature (base58): {draft.signature || "(none)"}
+            </pre>
+          </details>
         )}
-      </div>
+      </section>
+
+      <section style={{ marginTop: 16, padding: 14, border: "1px solid #e5e7eb", borderRadius: 12 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 900 }}>Why approval?</h2>
+        <div style={{ marginTop: 8, opacity: 0.85, lineHeight: 1.7 }}>
+          Signature proves you controlled the wallet at the time of submission. Approval is the project’s decision
+          to accept the contribution and issue points / reputation.
+        </div>
+      </section>
     </main>
   );
 }
