@@ -1,4 +1,3 @@
-// apps/web/src/app/projects/page.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -9,45 +8,34 @@ type Project = {
   name: string;
   slug: string;
   website?: string;
-
-  // ✅ New
-  contractAddress?: string;
-
-  chain: "solana";
+  chain: string;
   ownerWallet: string;
-
+  contractAddress?: string;
   createdAt: number;
   updatedAt: number;
 };
 
-function short(s: string, n = 8) {
-  if (!s) return "-";
+function cn(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
+}
+
+function short(s: string, n = 6) {
+  if (!s) return "";
   if (s.length <= n * 2 + 3) return s;
   return `${s.slice(0, n)}…${s.slice(-n)}`;
 }
 
-function fmtTime(ts?: number) {
-  if (!ts) return "—";
-  try {
-    return new Date(ts).toLocaleString();
-  } catch {
-    return String(ts);
-  }
-}
-
-async function copyText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
+function safeUrl(u?: string) {
+  const s = String(u || "").trim();
+  if (!s) return "";
+  if (s.startsWith("http://") || s.startsWith("https://")) return s;
+  // 容错：用户输入 example.com
+  return `https://${s}`;
 }
 
 export default function ProjectsPage() {
   const { publicKey, connected } = useWallet();
-  const ownerWallet = useMemo(() => (publicKey ? publicKey.toBase58() : ""), [publicKey]);
-  const locked = !connected || !ownerWallet;
+  const ownerWallet = useMemo(() => publicKey?.toBase58() || "", [publicKey]);
 
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -56,21 +44,11 @@ export default function ProjectsPage() {
   // create form
   const [name, setName] = useState("");
   const [website, setWebsite] = useState("");
+  const [chain, setChain] = useState("solana");
   const [contractAddress, setContractAddress] = useState("");
 
-  // list controls
-  const [q, setQ] = useState("");
-  const [sort, setSort] = useState<"updated" | "created" | "name">("updated");
-  const [toast, setToast] = useState<string | null>(null);
-
-  // ✅ mobile / layout (UI-only)
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 860);
-    onResize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+  // UI
+  const [createOpen, setCreateOpen] = useState(true);
 
   async function load() {
     setLoading(true);
@@ -79,7 +57,7 @@ export default function ProjectsPage() {
       const res = await fetch("/api/projects", { cache: "no-store" });
       const data = await res.json();
       if (!data?.ok) throw new Error(data?.error || "Failed to load projects");
-      setProjects(data.projects || []);
+      setProjects(Array.isArray(data.projects) ? data.projects : []);
     } catch (e: any) {
       setErr(String(e?.message || e));
     } finally {
@@ -91,8 +69,8 @@ export default function ProjectsPage() {
     e.preventDefault();
     setErr(null);
 
-    if (locked) {
-      setErr("Please connect your wallet first. Only the connected wallet can create a project.");
+    if (!connected || !ownerWallet) {
+      setErr("Please connect your wallet first (owner).");
       return;
     }
 
@@ -101,29 +79,30 @@ export default function ProjectsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: name.trim(),
-          website: website.trim() || undefined,
-          contractAddress: contractAddress.trim() || undefined,
-          chain: "solana",
+          name,
+          website: website.trim() ? safeUrl(website) : undefined,
+          chain: String(chain || "").trim() || "solana",
           ownerWallet,
+          contractAddress: contractAddress.trim() || undefined,
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
       if (!res.ok || !data?.ok) {
         const msg =
           data?.error === "VALIDATION_ERROR"
-            ? "Validation error. Make sure backend schema accepts contractAddress."
-            : data?.message || data?.error || "Failed to create project";
+            ? "Validation error. Check fields."
+            : data?.message || data?.error || `Failed to create (${res.status})`;
         throw new Error(msg);
       }
 
       setName("");
       setWebsite("");
+      setChain("solana");
       setContractAddress("");
-      setToast("✅ Project created");
-      setTimeout(() => setToast(null), 1200);
 
+      // 创建后自动收起表单更“高级”
+      setCreateOpen(false);
       await load();
     } catch (e: any) {
       setErr(String(e?.message || e));
@@ -137,451 +116,372 @@ export default function ProjectsPage() {
   const stats = useMemo(() => {
     const total = projects.length;
     const withWebsite = projects.filter((p) => !!p.website).length;
-    const withContract = projects.filter((p) => !!p.contractAddress).length;
-    const lastUpdated = projects.reduce((mx, p) => Math.max(mx, p.updatedAt || p.createdAt || 0), 0);
-    return { total, withWebsite, withContract, lastUpdated };
+    const withContract = projects.filter((p) => !!(p as any).contractAddress).length;
+    const chains = new Set(projects.map((p) => String(p.chain || "").toLowerCase()).filter(Boolean));
+    return { total, withWebsite, withContract, chains: chains.size };
   }, [projects]);
 
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return projects.slice();
-
-    return projects.filter((p) => {
-      const hay = [p.id, p.name, p.slug, p.website || "", p.contractAddress || "", p.ownerWallet, p.chain]
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(s);
-    });
-  }, [projects, q]);
-
-  const sorted = useMemo(() => {
-    const list = filtered.slice();
-    if (sort === "name") list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-    else if (sort === "created") list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    else list.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-    return list;
-  }, [filtered, sort]);
-
-  /* =========================
-     Styles (mobile-first)
-  ========================= */
-
-  const page: React.CSSProperties = {
-    padding: isMobile ? 16 : 26,
-    maxWidth: 1120,
-    margin: "0 auto",
-    boxSizing: "border-box",
-  };
-
-  const hero: React.CSSProperties = {
-    borderRadius: isMobile ? 18 : 22,
-    padding: isMobile ? 14 : 18,
-    border: "1px solid #e5e7eb",
-    background:
-      "radial-gradient(1100px 380px at 20% 0%, rgba(17,24,39,0.10), transparent), radial-gradient(800px 300px at 90% 20%, rgba(17,24,39,0.06), transparent)",
-    boxShadow: "0 12px 40px rgba(17,24,39,0.06)",
-  };
-
-  const card: React.CSSProperties = {
-    border: "1px solid #e5e7eb",
-    borderRadius: isMobile ? 16 : 18,
-    background: "white",
-  };
-
-  const pill: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "6px 10px",
-    borderRadius: 999,
-    border: "1px solid #e5e7eb",
-    background: "#f9fafb",
-    fontSize: 12,
-    fontWeight: 950,
-    whiteSpace: "nowrap",
-  };
-
-  const btnPrimary: React.CSSProperties = {
-    padding: "12px 14px",
-    borderRadius: 12,
-    border: "1px solid #111827",
-    background: "#111827",
-    color: "white",
-    fontWeight: 950,
-    cursor: "pointer",
-    textDecoration: "none",
-    width: "100%",
-  };
-
-  const btnGhost: React.CSSProperties = {
-    padding: "12px 14px",
-    borderRadius: 12,
-    border: "1px solid #e5e7eb",
-    background: "white",
-    color: "#111827",
-    fontWeight: 950,
-    cursor: "pointer",
-    textDecoration: "none",
-  };
-
-  const input: React.CSSProperties = {
-    width: "100%",
-    padding: "12px 12px",
-    borderRadius: 14,
-    border: "1px solid #e5e7eb",
-    outline: "none",
-    background: "white",
-    fontWeight: 800,
-    boxSizing: "border-box",
-  };
-
-  const label: React.CSSProperties = { fontSize: 13, fontWeight: 950, opacity: 0.75 };
-  const mono: React.CSSProperties = {
-    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-    wordBreak: "break-all",
-    overflowWrap: "anywhere",
-  };
-
-  const grid: React.CSSProperties = {
-    marginTop: 14,
-    display: "grid",
-    gridTemplateColumns: isMobile ? "1fr" : "1fr 1.35fr", // ✅ 手机单列
-    gap: isMobile ? 12 : 14,
-  };
-
-  const infoBox: React.CSSProperties = {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 14,
-    border: "1px solid #fecaca",
-    background: "#fff1f2",
-    color: "#991b1b",
-    fontWeight: 900,
-    lineHeight: 1.5,
-  };
-
-  const miniBtn: React.CSSProperties = {
-    padding: "6px 10px",
-    borderRadius: 999,
-    border: "1px solid #e5e7eb",
-    background: "white",
-    cursor: "pointer",
-    fontWeight: 950,
-    fontSize: 12,
-  };
-
   return (
-    <main style={page}>
-      {/* HERO */}
-      <section style={hero}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
-          <div style={{ minWidth: 260, flex: "1 1 640px" }}>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-              <span style={pill}>Project Registry</span>
-              <span style={{ fontSize: 12, opacity: 0.75 }}>
-                {stats.lastUpdated ? <>Last updated: {fmtTime(stats.lastUpdated)}</> : <>—</>}
-              </span>
-              <span style={{ fontSize: 12, opacity: 0.75 }}>
-                · creator:{" "}
-                {connected && ownerWallet ? (
-                  <code style={{ ...pill, padding: "4px 8px", background: "#fff", ...mono }}>{short(ownerWallet, 10)}</code>
-                ) : (
-                  <b>not connected</b>
-                )}
-              </span>
-            </div>
+    <div className="min-h-[calc(100vh-64px)] bg-white">
+      {/* subtle background */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-gradient-to-b from-gray-50 to-transparent" />
 
-            <h1 style={{ marginTop: 10, fontSize: isMobile ? 30 : 38, fontWeight: 950, lineHeight: 1.06, letterSpacing: -0.4 }}>
-              Projects
-            </h1>
-
-            <p style={{ marginTop: 10, fontSize: isMobile ? 14 : 15, opacity: 0.86, lineHeight: 1.75, maxWidth: 860 }}>
-              Create a project, set owner wallet, and publish missions into One Mission Universal. Mobile-friendly registry —
-              clean, fast, scalable.
-            </p>
-
-            <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <a href="/missions" style={btnGhost}>Explore Missions</a>
-              <a href="/dashboard" style={btnGhost}>Dashboard</a>
-              <button onClick={load} style={btnGhost}>{loading ? "Loading…" : "Refresh"}</button>
-            </div>
-
-            {err && <div style={infoBox}>{err}</div>}
-          </div>
-
-          {/* Stats */}
-          <div style={{ flex: "0 0 360px", minWidth: 260 }}>
-            <div style={{ ...card, padding: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                <div style={{ fontWeight: 950 }}>Registry Stats</div>
-                <span style={pill}>{locked ? "Wallet required" : "Ready"}</span>
-              </div>
-
-              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-                <StatRow label="Total projects" value={loading ? "…" : String(stats.total)} />
-                <StatRow label="With website" value={loading ? "…" : String(stats.withWebsite)} />
-                <StatRow label="With contract" value={loading ? "…" : String(stats.withContract)} />
-              </div>
-
-              <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7, lineHeight: 1.6 }}>
-                Connect wallet to create. (Recommended: backend also verify wallet on POST)
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* BODY */}
-      <section style={grid}>
-        {/* Create */}
-        <div style={{ ...card, padding: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 950 }}>Create Project</div>
-              <div style={{ marginTop: 6, fontSize: 13, opacity: 0.75, lineHeight: 1.6 }}>
-                Owner is the connected wallet. Contract address is optional (future multi-chain).
-              </div>
-            </div>
-            <span style={pill}>{locked ? "Locked" : "Unlocked"}</span>
-          </div>
-
-          <form onSubmit={onCreate} style={{ marginTop: 12, display: "grid", gap: 12 }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <div style={label}>Project Name</div>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. WAOC Core / One Field / Partner DAO"
-                style={{ ...input, opacity: locked ? 0.7 : 1 }}
-                disabled={locked}
-              />
-            </div>
-
-            <div style={{ display: "grid", gap: 6 }}>
-              <div style={label}>Website (optional)</div>
-              <input
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-                placeholder="https://..."
-                style={{ ...input, opacity: locked ? 0.7 : 1 }}
-                disabled={locked}
-              />
-            </div>
-
-            <div style={{ display: "grid", gap: 6 }}>
-              <div style={label}>Contract Address (optional)</div>
-              <input
-                value={contractAddress}
-                onChange={(e) => setContractAddress(e.target.value)}
-                placeholder="EVM / Solana / multi-chain address…"
-                style={{ ...input, ...mono, opacity: locked ? 0.7 : 1 }}
-                disabled={locked}
-              />
-            </div>
-
-            <div style={{ display: "grid", gap: 6 }}>
-              <div style={label}>Owner Wallet</div>
-              <input value={ownerWallet || ""} readOnly placeholder="Connect wallet to fill" style={{ ...input, ...mono, opacity: 0.85 }} />
-              {locked && (
-                <div style={{ fontSize: 13, opacity: 0.75, lineHeight: 1.6 }}>
-                  Go to{" "}
-                  <a href="/dashboard" style={{ textDecoration: "underline", fontWeight: 950 }}>
-                    /dashboard
-                  </a>{" "}
-                  to connect wallet first.
+      <main className="relative mx-auto max-w-6xl px-4 py-6 sm:py-10">
+        {/* HERO */}
+        <section className="rounded-3xl border bg-white shadow-sm">
+          <div className="rounded-3xl bg-[radial-gradient(1000px_380px_at_20%_0%,rgba(15,23,42,0.08),transparent),radial-gradient(800px_300px_at_90%_20%,rgba(15,23,42,0.06),transparent)] p-5 sm:p-8">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border bg-white px-3 py-1 text-xs font-extrabold text-gray-900">
+                    Project Registry
+                  </span>
+                  <span className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-gray-700">
+                    Mobile-first
+                  </span>
+                  <span className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-gray-700">
+                    Clean · Scalable
+                  </span>
                 </div>
-              )}
-            </div>
 
-            <button
-              type="submit"
-              style={{
-                ...btnPrimary,
-                opacity: locked || name.trim().length < 2 ? 0.55 : 1,
-                cursor: locked || name.trim().length < 2 ? "not-allowed" : "pointer",
-              }}
-              disabled={locked || name.trim().length < 2}
-            >
-              Create Project
-            </button>
-          </form>
-        </div>
+                <h1 className="mt-4 text-3xl font-black tracking-tight text-gray-900 sm:text-4xl">
+                  Projects
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">
+                  Create a project, set the owner wallet, then publish missions into One Mission Universal.
+                  Designed for <span className="font-semibold text-gray-900">mobile</span> and built for scale.
+                </p>
 
-        {/* List */}
-        <div style={{ ...card, padding: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 950 }}>All Projects</div>
-              <div style={{ marginTop: 6, fontSize: 13, opacity: 0.75 }}>
-                Search + sort for large registries. Mobile-friendly cards.
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-gray-700">
+                    creator:{" "}
+                    {connected && ownerWallet ? (
+                      <span className="font-black text-gray-900">
+                        {short(ownerWallet, 8)}
+                      </span>
+                    ) : (
+                      <span className="font-black text-red-600">not connected</span>
+                    )}
+                  </span>
+
+                  <span className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-gray-700">
+                    {loading ? "Loading…" : `${stats.total} total`}
+                  </span>
+                  <span className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-gray-700">
+                    {stats.chains} chain(s)
+                  </span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-cols-1">
+                <a
+                  href="/missions"
+                  className="rounded-2xl bg-gray-900 px-4 py-3 text-center text-sm font-extrabold text-white shadow-sm hover:bg-black"
+                >
+                  Explore Missions
+                </a>
+                <a
+                  href="/dashboard"
+                  className="rounded-2xl border bg-white px-4 py-3 text-center text-sm font-extrabold text-gray-900 hover:bg-gray-50"
+                >
+                  Dashboard
+                </a>
+                <button
+                  onClick={load}
+                  className="col-span-2 rounded-2xl border bg-white px-4 py-3 text-sm font-extrabold text-gray-900 hover:bg-gray-50 sm:col-span-1"
+                >
+                  Refresh
+                </button>
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as any)}
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  border: "1px solid #e5e7eb",
-                  background: "white",
-                  fontWeight: 900,
-                }}
-              >
-                <option value="updated">Sort: Updated</option>
-                <option value="created">Sort: Created</option>
-                <option value="name">Sort: Name</option>
-              </select>
+            {/* Stats cards */}
+            <div className="mt-6 grid gap-3 sm:grid-cols-4">
+              <StatCard title="Total projects" value={loading ? "…" : String(stats.total)} />
+              <StatCard title="With website" value={loading ? "…" : String(stats.withWebsite)} />
+              <StatCard title="With contract" value={loading ? "…" : String(stats.withContract)} />
+              <StatCard title="Chains" value={loading ? "…" : String(stats.chains)} />
             </div>
           </div>
+        </section>
 
-          <div style={{ marginTop: 12 }}>
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search by name / id / slug / owner / contract…"
-              style={input}
-            />
+        {/* Error */}
+        {err && (
+          <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+            {err}
           </div>
+        )}
 
-          {loading ? (
-            <div style={{ marginTop: 12, opacity: 0.8 }}>Loading…</div>
-          ) : sorted.length === 0 ? (
-            <div style={{ marginTop: 12, padding: 14, borderRadius: 14, border: "1px dashed #e5e7eb", opacity: 0.85, lineHeight: 1.6 }}>
-              No projects found.
+        {/* CREATE */}
+        <section className="mt-6 rounded-3xl border bg-white shadow-sm">
+          <button
+            type="button"
+            onClick={() => setCreateOpen((v) => !v)}
+            className="flex w-full items-center justify-between gap-3 rounded-3xl p-5 sm:p-6"
+          >
+            <div className="min-w-0 text-left">
+              <div className="text-sm font-extrabold text-gray-900">Create Project</div>
+              <div className="mt-1 text-xs leading-relaxed text-gray-600">
+                Minimal inputs. Owner wallet is read from your connected wallet.
+              </div>
             </div>
-          ) : (
-            <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
-              {sorted.map((p) => (
-                <div
-                  key={p.id}
-                  style={{
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 16,
-                    padding: isMobile ? 12 : 14,
-                    background: "white",
-                  }}
+            <span className="rounded-full border bg-white px-3 py-1 text-xs font-extrabold text-gray-900">
+              {createOpen ? "Collapse" : "Expand"}
+            </span>
+          </button>
+
+          {createOpen && (
+            <div className="border-t p-5 sm:p-6">
+              <form onSubmit={onCreate} className="grid gap-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Project Name">
+                    <input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. WAOC / My DAO / My App"
+                      className="w-full rounded-2xl border bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900/10"
+                    />
+                  </Field>
+
+                  <Field label="Website (optional)">
+                    <input
+                      value={website}
+                      onChange={(e) => setWebsite(e.target.value)}
+                      placeholder="weareoneconnection.org"
+                      className="w-full rounded-2xl border bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900/10"
+                    />
+                  </Field>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Chain">
+                    <input
+                      value={chain}
+                      onChange={(e) => setChain(e.target.value)}
+                      placeholder="solana / bsc / ethereum ..."
+                      className="w-full rounded-2xl border bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900/10"
+                    />
+                  </Field>
+
+                  <Field label="Contract Address (optional)">
+                    <input
+                      value={contractAddress}
+                      onChange={(e) => setContractAddress(e.target.value)}
+                      placeholder="0x... / mint..."
+                      className="w-full rounded-2xl border bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900/10"
+                    />
+                  </Field>
+                </div>
+
+                <Field label="Owner Wallet">
+                  <input
+                    value={ownerWallet || ""}
+                    readOnly
+                    placeholder="Connect wallet to fill"
+                    className="w-full rounded-2xl border bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900 outline-none"
+                  />
+                  {!connected && (
+                    <div className="mt-2 text-xs text-gray-600">
+                      Tip: connect wallet in{" "}
+                      <a href="/dashboard" className="font-extrabold text-gray-900 underline">
+                        /dashboard
+                      </a>
+                      .
+                    </div>
+                  )}
+                </Field>
+
+                <button
+                  type="submit"
+                  disabled={name.trim().length < 2}
+                  className={cn(
+                    "rounded-2xl px-4 py-3 text-center text-sm font-extrabold shadow-sm",
+                    name.trim().length < 2
+                      ? "cursor-not-allowed border bg-gray-100 text-gray-500"
+                      : "bg-gray-900 text-white hover:bg-black"
+                  )}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 12,
-                      flexWrap: "wrap",
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <div style={{ minWidth: 0, flex: "1 1 560px" }}>
-                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                        <div style={{ fontSize: 16, fontWeight: 950, lineHeight: 1.2, wordBreak: "break-word" }}>
-                          {p.name}
-                        </div>
-                        <span style={pill}>{p.chain}</span>
-                        <span style={{ ...pill, background: "#fff" }}>
-                          slug: <span style={mono}>{p.slug}</span>
-                        </span>
+                  Create
+                </button>
+              </form>
+            </div>
+          )}
+        </section>
+
+        {/* LIST */}
+        <section className="mt-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+              <div className="text-sm font-extrabold text-gray-900">All Projects</div>
+              <div className="mt-1 text-xs text-gray-600">
+                Tap a project to open details or manage missions.
+              </div>
+            </div>
+            <div className="text-xs font-semibold text-gray-600">
+              {loading ? "Loading…" : `${projects.length} project(s)`}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3">
+            {loading ? (
+              <>
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </>
+            ) : projects.length === 0 ? (
+              <div className="rounded-3xl border bg-white p-6 text-sm text-gray-600 shadow-sm">
+                No projects yet. Create your first project above.
+              </div>
+            ) : (
+              projects.map((p) => (
+                <div key={p.id} className="rounded-3xl border bg-white p-5 shadow-sm">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="text-base font-black text-gray-900">{p.name}</div>
+
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Badge>chain: <b className="ml-1">{String(p.chain || "-")}</b></Badge>
+                        <Badge>slug: <b className="ml-1">{p.slug}</b></Badge>
+                        {p.website ? <Badge>website</Badge> : <Badge muted>no website</Badge>}
+                        {(p as any).contractAddress ? <Badge>contract</Badge> : <Badge muted>no contract</Badge>}
                       </div>
 
-                      <div style={{ marginTop: 8, display: "grid", gap: 6, fontSize: 13, opacity: 0.88 }}>
-                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                          <span style={{ opacity: 0.7 }}>id:</span>
-                          <code style={mono}>{p.id}</code>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const ok = await copyText(p.id);
-                              setToast(ok ? "✅ Copied project id" : "Copy failed");
-                              setTimeout(() => setToast(null), 1000);
-                            }}
-                            style={miniBtn}
-                          >
-                            Copy
-                          </button>
+                      <div className="mt-3 space-y-1 text-xs text-gray-600">
+                        <div className="break-all">
+                          id: <span className="font-mono font-bold text-gray-900">{p.id}</span>
                         </div>
-
-                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                          <span style={{ opacity: 0.7 }}>owner:</span>
-                          <code style={mono}>{p.ownerWallet}</code>
-                          <span style={pill}>{short(p.ownerWallet, 10)}</span>
+                        <div className="break-all">
+                          owner:{" "}
+                          <span className="font-mono font-bold text-gray-900">
+                            {short(p.ownerWallet, 10)}
+                          </span>
                         </div>
-
-                        {p.contractAddress && (
-                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                            <span style={{ opacity: 0.7 }}>contract:</span>
-                            <code style={mono}>{p.contractAddress}</code>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const ok = await copyText(p.contractAddress!);
-                                setToast(ok ? "✅ Copied contract" : "Copy failed");
-                                setTimeout(() => setToast(null), 1000);
-                              }}
-                              style={miniBtn}
-                            >
-                              Copy
-                            </button>
+                        {(p as any).contractAddress && (
+                          <div className="break-all">
+                            contract:{" "}
+                            <span className="font-mono font-bold text-gray-900">
+                              {short((p as any).contractAddress, 10)}
+                            </span>
                           </div>
                         )}
-
-                        {p.website && (
-                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                            <span style={{ opacity: 0.7 }}>website:</span>
-                            <a
-                              href={p.website}
-                              target="_blank"
-                              rel="noreferrer"
-                              style={{ textDecoration: "underline", fontWeight: 900 }}
-                            >
-                              {p.website}
-                            </a>
-                          </div>
-                        )}
-
-                        <div style={{ fontSize: 12, opacity: 0.65 }}>
-                          created: {fmtTime(p.createdAt)} · updated: {fmtTime(p.updatedAt)}
-                        </div>
                       </div>
+
+                      {p.website && (
+                        <a
+                          href={safeUrl(p.website)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-3 inline-flex items-center gap-2 text-sm font-extrabold text-gray-900 underline"
+                        >
+                          Visit website
+                          <span className="text-xs opacity-70">↗</span>
+                        </a>
+                      )}
                     </div>
 
-                    <div style={{ flex: "0 0 auto", display: "flex", gap: 10, alignItems: "center", width: isMobile ? "100%" : "auto" }}>
+                    <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-cols-1">
                       <a
                         href={`/projects/${p.id}`}
-                        style={{
-                          ...btnGhost,
-                          minWidth: isMobile ? "100%" : 96,
-                          textAlign: "center",
-                        }}
+                        className="rounded-2xl border bg-white px-4 py-3 text-center text-sm font-extrabold text-gray-900 hover:bg-gray-50"
                       >
                         Open
+                      </a>
+                      <a
+                        href={`/projects/${p.id}/missions`}
+                        className="rounded-2xl bg-gray-900 px-4 py-3 text-center text-sm font-extrabold text-white hover:bg-black"
+                      >
+                        Manage Missions
+                      </a>
+
+                      {/* 你有 admin review 路由的话，这里给一个更“高级”的入口（不影响结构） */}
+                      <a
+                        href={`/p/${p.id}/admin/reviews`}
+                        className="col-span-2 rounded-2xl border bg-white px-4 py-3 text-center text-sm font-extrabold text-gray-900 hover:bg-gray-50 sm:col-span-1"
+                      >
+                        Admin Reviews
                       </a>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
+        </section>
 
-          {toast && (
-            <div style={{ marginTop: 12, fontSize: 12, opacity: 0.8 }}>
-              {toast}
+        {/* Mobile sticky quick actions (高级感 + 方便) */}
+        <div className="sticky bottom-3 mt-8 sm:hidden">
+          <div className="rounded-3xl border bg-white p-2 shadow-sm">
+            <div className="grid grid-cols-2 gap-2">
+              <a
+                href="/missions"
+                className="rounded-2xl bg-gray-900 px-4 py-3 text-center text-sm font-extrabold text-white"
+              >
+                Missions
+              </a>
+              <a
+                href="/dashboard"
+                className="rounded-2xl border bg-white px-4 py-3 text-center text-sm font-extrabold text-gray-900"
+              >
+                Dashboard
+              </a>
             </div>
-          )}
+          </div>
         </div>
-      </section>
-
-      <footer style={{ marginTop: 16, fontSize: 12, opacity: 0.7, lineHeight: 1.7 }}>
-        APIs: <code>/api/projects</code> (GET/POST) · Recommended: enforce wallet ownership on backend POST.
-      </footer>
-    </main>
+      </main>
+    </div>
   );
 }
 
-function StatRow({ label, value }: { label: string; value: string }) {
+/* ---------- small components ---------- */
+
+function StatCard({ title, value }: { title: string; value: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-      <div style={{ opacity: 0.75 }}>{label}</div>
-      <div style={{ fontWeight: 950 }}>{value}</div>
+    <div className="rounded-2xl border bg-white p-4 shadow-sm">
+      <div className="text-xs font-semibold text-gray-600">{title}</div>
+      <div className="mt-1 text-2xl font-black tracking-tight text-gray-900">{value}</div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-2">
+      <div className="text-xs font-extrabold text-gray-900">{label}</div>
+      {children}
+    </div>
+  );
+}
+
+function Badge({ children, muted }: { children: React.ReactNode; muted?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold",
+        muted ? "bg-gray-50 text-gray-500" : "bg-white text-gray-900"
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <div className="rounded-3xl border bg-white p-5 shadow-sm">
+      <div className="h-4 w-40 animate-pulse rounded bg-gray-200" />
+      <div className="mt-3 flex gap-2">
+        <div className="h-6 w-24 animate-pulse rounded-full bg-gray-200" />
+        <div className="h-6 w-20 animate-pulse rounded-full bg-gray-200" />
+        <div className="h-6 w-24 animate-pulse rounded-full bg-gray-200" />
+      </div>
+      <div className="mt-4 h-3 w-3/4 animate-pulse rounded bg-gray-200" />
+      <div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-gray-200" />
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="h-10 animate-pulse rounded-2xl bg-gray-200" />
+        <div className="h-10 animate-pulse rounded-2xl bg-gray-200" />
+      </div>
     </div>
   );
 }
