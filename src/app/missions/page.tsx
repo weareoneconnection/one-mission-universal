@@ -35,6 +35,9 @@ export default function MissionsExplorePage() {
   const { publicKey, connected } = useWallet();
   const wallet = useMemo(() => (publicKey ? publicKey.toBase58() : ""), [publicKey]);
 
+  // ✅ lock condition
+  const locked = !connected || !wallet;
+
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 860);
@@ -74,6 +77,7 @@ export default function MissionsExplorePage() {
   }
 
   async function loadProofs() {
+    // ✅ locked: do not try proofs
     if (!wallet) {
       setProofs([]);
       return;
@@ -233,6 +237,12 @@ export default function MissionsExplorePage() {
     boxShadow: "0 10px 22px rgba(15,23,42,0.18)",
   };
 
+  const btnDisabled: React.CSSProperties = {
+    ...btn,
+    cursor: "not-allowed",
+    opacity: 0.6,
+  };
+
   const input: React.CSSProperties = {
     width: "100%",
     minHeight: touchH,
@@ -326,14 +336,18 @@ export default function MissionsExplorePage() {
           <div style={{ minWidth: 0, flex: "1 1 520px" }}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               <span style={pill}>Mission Library</span>
+
               {connected && wallet ? (
                 <span style={pill}>
                   wallet: <span style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>{short(wallet, 10)}</span>
                   {proofsLoading && <span style={{ opacity: 0.7 }}>checking…</span>}
                 </span>
               ) : (
-                <span style={pill}>Connect wallet to show status</span>
+                <span style={{ ...pill, background: "#fff1f2", borderColor: "#fecaca", color: "#991b1b" }}>
+                  Wallet required to open missions
+                </span>
               )}
+
               <span style={pill}>{loading ? "Loading…" : `${filtered.length} mission(s)`}</span>
             </div>
 
@@ -371,26 +385,22 @@ export default function MissionsExplorePage() {
               </div>
             </div>
 
+            {/* ✅ hard lock hint */}
+            {locked && (
+              <div style={{ marginTop: 12, padding: 12, borderRadius: 14, border: "1px solid #fecaca", background: "#fff1f2", color: "#991b1b", fontWeight: 900, lineHeight: 1.6 }}>
+                Wallet not connected. You can browse missions, but <b>cannot open</b> mission pages or submit proofs.
+                <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <a href="/dashboard" style={btnPrimary}>Connect Wallet</a>
+                </div>
+              </div>
+            )}
+
             {err && (
               <div style={{ marginTop: 12, padding: 12, borderRadius: 14, border: "1px solid #fecaca", background: "#fff1f2", color: "#991b1b", fontWeight: 900 }}>
                 {err}
               </div>
             )}
           </div>
-
-          {!isMobile && (
-            <div style={{ flex: "0 0 320px", minWidth: 260 }}>
-              <div style={{ border: "1px solid rgba(15,23,42,0.10)", borderRadius: 18, padding: 14, background: "white" }}>
-                <div style={{ fontWeight: 950, color: "#0f172a" }}>Tips</div>
-                <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8, lineHeight: 1.65, color: "#334155" }}>
-                  • Start → open mission and submit proof<br />
-                  • Submitted = pending review<br />
-                  • Completed = approved (earned)<br />
-                  • Fold by project scales well
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </section>
 
@@ -440,7 +450,7 @@ export default function MissionsExplorePage() {
                       let kind: "START" | "PENDING" | "APPROVED" | "REJECTED" | "DISABLED" = "START";
                       let text = "Start";
 
-                      if (connected && wallet) {
+                      if (!locked) {
                         if (st === "APPROVED") {
                           kind = "APPROVED";
                           text = "Completed";
@@ -457,6 +467,10 @@ export default function MissionsExplorePage() {
                           kind = "START";
                           text = "Start";
                         }
+                      } else {
+                        // ✅ hard lock: always show connect
+                        kind = "DISABLED";
+                        text = "Connect wallet";
                       }
 
                       const href = `/missions/${m.id}`;
@@ -499,18 +513,17 @@ export default function MissionsExplorePage() {
                             <span style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>{short(m.id, 10)}</span>
                           </div>
 
-                          {/* CTA full width on mobile */}
+                          {/* CTA area (locked = no href) */}
                           <div style={{ display: "grid", gap: 10 }}>
-                            {kind === "DISABLED" ? (
+                            {locked ? (
+                              <a href="/dashboard" style={{ textDecoration: "none" }}>
+                                {ctaPill("START", "Connect wallet")}
+                              </a>
+                            ) : kind === "DISABLED" ? (
                               ctaPill(kind, text)
                             ) : (
                               <a href={href} style={{ textDecoration: "none" }}>
                                 {ctaPill(kind, text)}
-                              </a>
-                            )}
-                            {!connected && (
-                              <a href="/dashboard" style={{ ...btn, width: "100%", justifyContent: "center" }}>
-                                Connect wallet to track status
                               </a>
                             )}
                           </div>
@@ -547,6 +560,12 @@ export default function MissionsExplorePage() {
               <button onClick={() => openAll(true)} style={btn}>Expand</button>
               <button onClick={() => openAll(false)} style={btn}>Collapse</button>
             </div>
+
+            {locked && (
+              <a href="/dashboard" style={{ ...btnPrimary, width: "100%" }}>
+                Connect Wallet
+              </a>
+            )}
           </div>
         </div>
       )}
