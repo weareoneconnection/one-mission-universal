@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
 function cn(...xs: Array<string | false | null | undefined>) {
@@ -18,9 +18,21 @@ const NAV = [
 
 export default function TopNav() {
   const pathname = usePathname();
+  const params = useParams<{ projectId?: string }>();
   const [open, setOpen] = useState(false);
 
+  // ✅ Only show admin entry when we are inside /p/[projectId]/...
+  const projectId = useMemo(() => {
+    const pid = String((params as any)?.projectId || "").trim();
+    return pid || "";
+  }, [params]);
+
   const isActive = (href: string) => (pathname || "").startsWith(href);
+
+  // Close dropdown after route change (simple + safe)
+  React.useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
   return (
     <header className="sticky top-0 z-50 border-b bg-white">
@@ -48,8 +60,19 @@ export default function TopNav() {
           </nav>
         </div>
 
-        {/* Right: wallet + mobile menu button */}
+        {/* Right: admin + wallet + mobile menu button */}
         <div className="flex min-w-0 flex-nowrap items-center gap-2">
+          {/* ✅ Desktop Admin entry (only inside project context) */}
+          {projectId && (
+            <Link
+              href={`/p/${projectId}/admin/reviews`}
+              className="hidden sm:inline-flex h-10 items-center justify-center rounded-xl border border-gray-900 bg-gray-900 px-3 text-sm font-extrabold text-white hover:opacity-90"
+              title="Admin Reviews"
+            >
+              Admin
+            </Link>
+          )}
+
           {/* Wallet button: hard-limit width on mobile so it never overflows */}
           <div className="walletWrap w-[148px] sm:w-auto min-w-0 overflow-hidden">
             <WalletMultiButton />
@@ -84,6 +107,17 @@ export default function TopNav() {
                 {n.label}
               </Link>
             ))}
+
+            {/* ✅ Mobile Admin entry (only inside project context) */}
+            {projectId && (
+              <Link
+                href={`/p/${projectId}/admin/reviews`}
+                onClick={() => setOpen(false)}
+                className="col-span-2 rounded-xl bg-gray-900 px-3 py-2 text-sm font-extrabold text-white text-center hover:opacity-90"
+              >
+                Admin Reviews
+              </Link>
+            )}
           </div>
         </div>
       </div>
