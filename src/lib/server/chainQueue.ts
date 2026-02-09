@@ -3,9 +3,7 @@ import "server-only";
 import { getRedis } from "@/lib/server/redis";
 
 const QKEY = "om:chain:queue:v1";
-/** ✅ 去重索引：同一个 proofId 只能在队列里出现一次 */
-const QSET = "om:chain:queue:set:v1";
-
+const QSET = "om:chain:queue:set:v1"; // ✅ 新增：用于去重
 const META_LAST_SYNC = "om:chain:lastSyncAt";
 const META_FINALIZED = "om:chain:finalizedCount";
 const META_LAST_ERROR = "om:chain:lastError";
@@ -23,7 +21,6 @@ function pickDriver(): Driver {
 // ---- memory db (dev) ----
 type MemDB = {
   q: string[];
-  qset: Set<string>;
   lastSyncAt?: number;
   finalizedCount: number;
   lastError?: string | null;
@@ -31,10 +28,8 @@ type MemDB = {
 function getMemDB(): MemDB {
   const g = globalThis as any;
   if (!g.__OM_CHAIN_QUEUE__) {
-    g.__OM_CHAIN_QUEUE__ = { q: [], qset: new Set(), finalizedCount: 0, lastError: null };
+    g.__OM_CHAIN_QUEUE__ = { q: [], finalizedCount: 0, lastError: null };
   }
-  // 兼容老数据（以前没有 qset）
-  if (!g.__OM_CHAIN_QUEUE__.qset) g.__OM_CHAIN_QUEUE__.qset = new Set();
   return g.__OM_CHAIN_QUEUE__ as MemDB;
 }
 
@@ -49,81 +44,61 @@ export async function enqueueProof(proofId: string) {
   const driver = pickDriver();
 
   if (driver === "memory") {
-    const db = getMemDB();
-    if (db.qset.has(id)) return; // ✅ 去重
-    db.qset.add(id);
-    db.q.unshift(id);
+    // ✅ 去重：已有就不再入队
+    const q = getMemDB().q;
+    if (q.includes(id)) return;
+    q.unshift(id);
     return;
   }
 
   if (driver === "redis") {
     const r = await getRedis();
-
-    // ✅ 去重：只有第一次 SADD 成功才入队
+    // ✅ 去重：用 set 判断是否已存在
     const added = await r.sadd(QSET, id);
     if (!added) return;
-
-    try {
-      await r.lpush(QKEY, id);
-    } catch (e) {
-      // 如果 lpush 失败，把 set 回滚，避免“永远无法再入队”
-      try {
-        await r.srem(QSET, id);
-      } catch {}
-      throw e;
-    }
+    await r.lpush(QKEY, id);
     return;
   }
 
-  // kv: use Redis ops (atomic enough for our use)
+  // kv fallback: store as array (simple)
   const { kv } = await import("@vercel/kv");
+  const arr = ((await kv.get(QKEY)) as string[] | null) ?? [];
+  const next = Array.isArray(arr) ? arr : [];
 
-  const added = await kv.sadd(QSET, id);
-  if (!added) return;
-
-  try {
-    await kv.lpush(QKEY, id);
-  } catch (e) {
-    try {
-      await kv.srem(QSET, id);
-    } catch {}
-    throw e;
+  // ✅ 去重：已有就不再入队
+  if (next.includes(id)) {
+    return;
   }
+
+  next.unshift(id);
+  await kv.set(QKEY, next);
 }
 
 export async function dequeueProof(): Promise<string | null> {
   const driver = pickDriver();
 
   if (driver === "memory") {
-    const db = getMemDB();
-    const v = db.q.pop();
-    if (!v) return null;
-    db.qset.delete(v); // ✅ 出队后释放去重索引
+    const v = getMemDB().q.pop();
     return v ?? null;
   }
 
   if (driver === "redis") {
     const r = await getRedis();
     const v = await r.rpop(QKEY);
-    if (!v) return null;
-
-    const id = String(v);
-    // ✅ 出队后释放去重索引（允许未来再次入队，比如重试）
-    try {
+    const id = v ? String(v) : null;
+    if (id) {
+      // ✅ 出队时同步从 set 删除，避免 set 越来越大
       await r.srem(QSET, id);
-    } catch {}
+    }
     return id;
   }
 
   const { kv } = await import("@vercel/kv");
-  const v = await kv.rpop(QKEY);
-  if (!v) return null;
-
-  const id = String(v);
-  try {
-    await kv.srem(QSET, id);
-  } catch {}
-  return id;
+  const arr = ((await kv.get(QKEY)) as string[] | null) ?? [];
+  if (!Array.isArray(arr) || arr.length === 0) return null;
+  const v = arr.pop()!;
+  await kv.set(QKEY, arr);
+  return v ?? null;
 }
 
 export async function queueLength(): Promise<number> {
@@ -137,8 +112,8 @@ export async function queueLength(): Promise<number> {
   }
 
   const { kv } = await import("@vercel/kv");
-  const n = await kv.llen(QKEY);
-  return Number(n || 0);
+  const arr = (await kv.get(QKEY)) as string[] | null;
+  return Array.isArray(arr) ? arr.length : 0;
 }
 
 /* =========================

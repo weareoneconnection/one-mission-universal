@@ -14,6 +14,10 @@ import { addPointsOnchain } from "@/lib/onchain/waocPointsAdapter";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+// ✅ 新增：让 Vercel Cron 能打到
+export async function GET(req: Request) {
+  return POST(req);
+}
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
