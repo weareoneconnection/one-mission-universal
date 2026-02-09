@@ -1,94 +1,140 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import * as ProofStore from "@/lib/proof-store";
+import { getHeaderWallet } from "@/lib/server/auth";
+import { getProofById, saveProof } from "@/lib/proof-store";
+import type { Proof, ProofEvent } from "@/lib/types";
+import { nanoid } from "nanoid";
+import { getMissionById } from "@/lib/missions/store";
+
+/* ✅ PATCH: 仅新增这两个 import（不影响原结构） */
+import { enqueueProof } from "@/lib/server/chainQueue";
+import { updateChainQueueItem } from "@/lib/server/chainProofStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const DEFAULT_REPUTATION_APPROVE = 1;
+
+/* -------------------------
+  helpers（与 reject 同逻辑）
+------------------------- */
 function safeTrim(v: any) {
   return String(v ?? "").trim();
 }
 
-function pickStatus(v: string) {
-  const s = safeTrim(v).toUpperCase();
-  if (s === "PENDING" || s === "APPROVED" || s === "REJECTED" || s === "REVOKED") return s;
+function getProofIdFromReq(req: NextRequest, params?: { proofId?: string }) {
+  // 1) Next params
+  const fromParams = safeTrim(params?.proofId);
+  if (fromParams) return fromParams;
+
+  // 2) URL fallback: /api/.../proofs/:proofId/approve
+  try {
+    const pathname = new URL(req.url).pathname;
+    const parts = pathname.split("/").filter(Boolean);
+    const idx = parts.indexOf("proofs");
+    const fromPath = idx >= 0 ? safeTrim(parts[idx + 1]) : "";
+    if (fromPath) return fromPath;
+  } catch {}
+
   return "";
 }
 
-/**
- * ✅ 无权限读取版：
- * - 不校验 session / x-wallet / admin
- * - 仅按 projectId + status(可选) 读取 proofs
- * - 依赖 proof-store 内部的读取逻辑（支持 memory/kv/redis 等）
- */
+function clampNote(note: string) {
+  const n = safeTrim(note);
+  if (!n) return "";
+  return n.length > 500 ? n.slice(0, 500) : n;
+}
+
+/* =========================
+   POST /api/projects/:projectId/proofs/:proofId/approve
+========================= */
 type Ctx = {
   params: Promise<{
     projectId: string;
+    proofId: string;
   }>;
 };
 
-export async function GET(req: NextRequest, ctx: Ctx) {
+export async function POST(req: NextRequest, ctx: Ctx) {
   try {
-    const { projectId } = await ctx.params;
-    const pid = safeTrim(projectId);
+    const { proofId } = await ctx.params;
 
-    if (!pid) {
-      return NextResponse.json({ ok: false, error: "MISSING_PROJECT_ID" }, { status: 400 });
+    // ✅ proofId 兜底解析（与 reject 一致）
+    const finalProofId = getProofIdFromReq(req, { proofId });
+    if (!finalProofId) {
+      return NextResponse.json({ ok: false, error: "MISSING_PROOF_ID" }, { status: 400 });
     }
 
-    const url = new URL(req.url);
-    const status = pickStatus(url.searchParams.get("status") || "");
+    // ✅ 只认 header 钱包
+    const adminWallet = getHeaderWallet(req);
+    if (!adminWallet) {
+      return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
+    }
 
-    // 兼容你项目里 proof-store 可能存在的不同函数名
-    const store: any = ProofStore as any;
+    const proof = await getProofById(finalProofId);
+    if (!proof) {
+      return NextResponse.json({ ok: false, error: "PROOF_NOT_FOUND" }, { status: 404 });
+    }
 
-    const fn =
-      store.getProjectProofs ||
-      store.getProofsByProjectId ||
-      store.listProjectProofs ||
-      store.listProofsByProjectId ||
-      store.getProofsForProject ||
-      store.listProofsForProject;
-
-    if (typeof fn !== "function") {
+    if (proof.currentStatus !== "PENDING") {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "PROOF_STORE_MISSING_LIST_FN",
-          message:
-            "Cannot find a list function in '@/lib/proof-store'. Expected one of: getProjectProofs/getProofsByProjectId/listProjectProofs/listProofsByProjectId/getProofsForProject/listProofsForProject",
-        },
-        { status: 500 }
+        { ok: false, error: "INVALID_PROOF_STATUS", status: proof.currentStatus },
+        { status: 400 }
       );
     }
 
-    // 常见签名兼容：
-    // - fn(projectId)
-    // - fn(projectId, status)
-    // - fn({ projectId, status })
-    let proofs: any[] = [];
+    // ✅ 读取 mission.weight 作为 points
+    const mission = await getMissionById(proof.missionId);
+    if (!mission) {
+      return NextResponse.json(
+        { ok: false, error: "MISSION_NOT_FOUND", missionId: proof.missionId },
+        { status: 404 }
+      );
+    }
 
+    const pointsAwarded = Number((mission as any).weight) || 0;
+
+    const body = await req.json().catch(() => ({}));
+    const note = clampNote(body?.note);
+
+    const now = Date.now();
+
+    const event: ProofEvent = {
+      id: `evt_${nanoid(10)}`,
+      type: "APPROVED",
+      at: now,
+      by: adminWallet,
+      reason: note || undefined,
+    };
+
+    const next: Proof = {
+      ...proof,
+      currentStatus: "APPROVED",
+      points: pointsAwarded,
+      reputationDelta: (proof.reputationDelta ?? 0) + DEFAULT_REPUTATION_APPROVE,
+      events: [...(proof.events ?? []), event],
+      updatedAt: now,
+    };
+
+    /* ✅ 原逻辑：保存 proof */
+    await saveProof(next);
+
+    /* ✅ PATCH：approve 后自动入队（best-effort，不影响返回） */
     try {
-      // 尝试对象参数
-      const r1 = await fn({ projectId: pid, status: status || undefined });
-      if (Array.isArray(r1)) proofs = r1;
-      else if (Array.isArray(r1?.proofs)) proofs = r1.proofs;
-    } catch {
-      // 回退到位置参数
-      const r2 = status ? await fn(pid, status) : await fn(pid);
-      if (Array.isArray(r2)) proofs = r2;
-      else if (Array.isArray(r2?.proofs)) proofs = r2.proofs;
+      await updateChainQueueItem(finalProofId, {
+        userWallet: next.userWallet,
+        chainStatus: "QUEUED",
+        lastError: "",
+        updatedAt: Date.now(),
+      });
+      await enqueueProof(finalProofId);
+      console.log("[approve] enqueued", finalProofId);
+    } catch (e) {
+      console.warn("[approve] enqueue failed:", e);
     }
 
-    // 如果 store 没做 status 过滤，这里兜底过滤一次
-    if (status) {
-      proofs = (proofs || []).filter(
-        (p: any) => String(p?.currentStatus || "").toUpperCase() === status
-      );
-    }
-
-    return NextResponse.json({ ok: true, proofs });
+    return NextResponse.json({ ok: true, proof: next });
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, error: "INTERNAL_ERROR", message: String(e?.message || e) },
