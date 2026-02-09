@@ -414,11 +414,34 @@ export default function HomePage() {
                 </span>
               </div>
 
-              <h1 style={{ marginTop: 12, fontSize: "clamp(28px, 5vw, 44px)", fontWeight: 950, lineHeight: 1.05 }}>
-                One Mission Universal
-                <br />
-                Contribution → Identity → On-chain
-              </h1>
+              <h1
+  style={{
+    marginTop: 12,
+    fontSize: "clamp(28px, 5vw, 44px)",
+    fontWeight: 950,
+    lineHeight: 1.05,
+  }}
+>
+  One Mission
+  <br />
+  <span style={{ fontWeight: 900 }}>
+    Human Contribution → Identity → On-chain Record
+  </span>
+</h1>
+<p
+  style={{
+    marginTop: 12,
+    maxWidth: 720,
+    fontSize: 15,
+    lineHeight: 1.6,
+    opacity: 0.85,
+  }}
+>
+  A system where contribution defines who you are —
+  <br />
+  and the chain remembers it.
+</p>
+
 
               <p style={{ marginTop: 12, fontSize: "clamp(14px, 2.2vw, 16px)", opacity: 0.86, maxWidth: 880, lineHeight: 1.65 }}>
                 A universal Proof-of-Contribution console for projects and users. Review remains human; the chain is the permanent record.
@@ -427,12 +450,12 @@ export default function HomePage() {
               {/* ✅ 对外解释（6 行，投资人/第三方一眼看懂） */}
               <div style={externalBrief}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                  <div style={{ fontWeight: 950, fontSize: 13 }}>What is One Mission Universal?</div>
+                  <div style={{ fontWeight: 950, fontSize: 13 }}>What is One Mission ?</div>
                   <span style={badgePill}>permissioned infra</span>
                 </div>
 
                 <div style={{ marginTop: 10, display: "grid", gap: 6, fontSize: 13, lineHeight: 1.65, opacity: 0.92 }}>
-                  <div>One Mission Universal is a permissioned infrastructure for recording verified contribution.</div>
+                  <div>One Mission is a permissioned infrastructure for recording verified contribution.</div>
                   <div>Projects define missions. Users submit proofs. Humans review.</div>
                   <div>Approved proofs become the source of truth.</div>
                   <div>On-chain records act as immutable receipts — not triggers.</div>
@@ -1094,7 +1117,7 @@ function HeroVisual() {
 
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 950, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                WAOC · One Mission Universal
+                WAOC · One Mission
               </div>
 
               {/* ✅ 对外文案（替换开发提示） */}
