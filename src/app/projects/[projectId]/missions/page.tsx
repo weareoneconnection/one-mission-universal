@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { useWallet } from "@solana/wallet-adapter-react";
 
 type Mission = {
   id: string;
@@ -22,6 +23,12 @@ type Proof = {
   currentStatus?: "PENDING" | "APPROVED" | "REJECTED" | "REVOKED";
 };
 
+type Project = {
+  id: string;
+  ownerWallet: string;
+  name?: string;
+};
+
 function fmtShort(s: string, n = 6) {
   if (!s) return "";
   if (s.length <= n * 2 + 3) return s;
@@ -32,9 +39,20 @@ export default function ProjectMissionsPage() {
   const params = useParams<{ projectId: string }>();
   const projectId = String(params?.projectId || "");
 
+  // ✅ wallet adapter（用于 owner 判定）
+  const { publicKey, connected } = useWallet();
+  const connectedWallet = useMemo(() => (publicKey ? publicKey.toBase58() : ""), [publicKey]);
+
   const [loading, setLoading] = useState(true);
   const [missions, setMissions] = useState<Mission[]>([]);
   const [err, setErr] = useState<string | null>(null);
+
+  // ✅ project owner
+  const [projectOwner, setProjectOwner] = useState<string>("");
+  const isOwner = useMemo(() => {
+    if (!connected || !connectedWallet || !projectOwner) return false;
+    return connectedWallet === projectOwner;
+  }, [connected, connectedWallet, projectOwner]);
 
   // create form
   const [title, setTitle] = useState("");
@@ -54,9 +72,7 @@ export default function ProjectMissionsPage() {
   // ✅ Create fold (mobile default collapsed, desktop default open)
   const [openCreate, setOpenCreate] = useState(true);
   useEffect(() => {
-    // first mount only: set by device
     setOpenCreate((prev) => {
-      // if user already toggled (rare on first mount), keep
       if (typeof prev === "boolean") return isMobile ? false : true;
       return isMobile ? false : true;
     });
@@ -70,6 +86,21 @@ export default function ProjectMissionsPage() {
   // Fold state
   const [openActive, setOpenActive] = useState(true);
   const [openInactive, setOpenInactive] = useState(false);
+
+  async function loadProjectOwner() {
+    if (!projectId) return;
+    try {
+      const res = await fetch("/api/projects", { cache: "no-store" });
+      const data = await res.json();
+      if (!data?.ok) return;
+
+      const list: Project[] = Array.isArray(data.projects) ? data.projects : [];
+      const p = list.find((x) => String(x?.id) === projectId);
+      setProjectOwner(String(p?.ownerWallet || ""));
+    } catch {
+      // ignore
+    }
+  }
 
   async function load() {
     if (!projectId) return;
@@ -95,6 +126,16 @@ export default function ProjectMissionsPage() {
 
     if (!projectId) {
       setErr("Missing projectId in route. Please open from /projects and try again.");
+      return;
+    }
+
+    // ✅ owner-only
+    if (!connected || !connectedWallet) {
+      setErr("Connect wallet in /dashboard to create missions.");
+      return;
+    }
+    if (!isOwner) {
+      setErr("Owner only: only the project owner wallet can create missions.");
       return;
     }
 
@@ -136,6 +177,17 @@ export default function ProjectMissionsPage() {
 
   async function toggleActive(id: string, active: boolean) {
     setErr(null);
+
+    // ✅ owner-only
+    if (!connected || !connectedWallet) {
+      setErr("Connect wallet in /dashboard to manage missions.");
+      return;
+    }
+    if (!isOwner) {
+      setErr("Owner only: only the project owner wallet can enable/disable missions.");
+      return;
+    }
+
     try {
       const res = await fetch("/api/missions", {
         method: "PATCH",
@@ -152,9 +204,11 @@ export default function ProjectMissionsPage() {
 
   useEffect(() => {
     load();
+    loadProjectOwner();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
+  // 如果你想：连接钱包后也用 adapter 钱包展示 Completed，可以把 localStorage 那段保留，同时优先 adapter
   useEffect(() => {
     try {
       const w = String(localStorage.getItem("one_wallet") || "").trim();
@@ -470,6 +524,9 @@ export default function ProjectMissionsPage() {
   const renderMission = (m: Mission) => {
     const done = completedSet.has(m.id);
 
+    // ✅ owner-only controls disabled state
+    const manageLocked = !connected || !connectedWallet || !isOwner;
+
     return (
       <div key={m.id} style={styles.missionCard}>
         <div style={{ fontSize: 15, fontWeight: 950, color: "#0f172a", lineHeight: 1.25 }}>
@@ -520,17 +577,31 @@ export default function ProjectMissionsPage() {
         )}
 
         <div style={{ display: "grid", gap: 10 }}>
-  <button
-    onClick={() => toggleActive(m.id, !m.active)}
-    style={{ ...(m.active ? styles.btnDangerSoft : styles.btnSuccessSoft), width: "100%" }}
-  >
-    {m.active ? "Disable" : "Enable"}
-  </button>
-</div>
-
+          <button
+            onClick={() => {
+              if (manageLocked) {
+                setErr(!connected ? "Connect wallet in /dashboard to manage missions." : "Owner only: only project owner can manage missions.");
+                return;
+              }
+              toggleActive(m.id, !m.active);
+            }}
+            disabled={manageLocked}
+            style={{
+              ...(m.active ? styles.btnDangerSoft : styles.btnSuccessSoft),
+              width: "100%",
+              opacity: manageLocked ? 0.55 : 1,
+              cursor: manageLocked ? "not-allowed" : "pointer",
+            }}
+          >
+            {m.active ? "Disable" : "Enable"}
+          </button>
+        </div>
       </div>
     );
   };
+
+  // ✅ owner-only lock for create section
+  const createLocked = !connected || !connectedWallet || !isOwner;
 
   return (
     <main style={styles.page}>
@@ -543,8 +614,36 @@ export default function ProjectMissionsPage() {
           <span style={styles.pill}>{loading ? "Loading…" : `${missions.length} total`}</span>
           <span style={styles.pill}>{activeMissions.length} active</span>
           <span style={styles.pill}>{inactiveMissions.length} inactive</span>
-          {wallet ? <span style={styles.pill}>wallet: {fmtShort(wallet, 6)}</span> : null}
+
+          {/* ✅ role pill（不改结构，只加一个 pill） */}
+          <span style={styles.pill}>
+            role:{" "}
+            <b style={{ marginLeft: 6 }}>
+              {projectOwner ? (isOwner ? "OWNER" : "VIEWER") : "UNKNOWN"}
+            </b>
+          </span>
+
+          {projectOwner ? (
+            <span style={styles.pill}>
+              owner: <span style={{ fontFamily: "monospace" }}>{fmtShort(projectOwner, 6)}</span>
+            </span>
+          ) : null}
+
+          {connected && connectedWallet ? (
+            <span style={styles.pill}>
+              wallet: <span style={{ fontFamily: "monospace" }}>{fmtShort(connectedWallet, 6)}</span>
+            </span>
+          ) : null}
+
+          {wallet ? <span style={styles.pill}>local: {fmtShort(wallet, 6)}</span> : null}
         </div>
+
+        {/* ✅ 轻提示：非 owner 仍可看，但不可管理 */}
+        {!isOwner && projectOwner && (
+          <div style={{ marginTop: 10, ...styles.sub }}>
+            This page is viewable by any wallet. <b>Mission management is owner-only.</b>
+          </div>
+        )}
 
         <div style={{ marginTop: 12, display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
           <a href={`/projects/${projectId}`} style={{ ...styles.btnBase, width: "100%" }}>
@@ -554,9 +653,30 @@ export default function ProjectMissionsPage() {
             Refresh
           </button>
 
-          <a href={`/p/${projectId}/admin/reviews`} style={{ ...styles.btnPrimary, width: "100%" }}>
+          {/* ✅ Admin Reviews：保留结构，但非 owner 直接拦截 */}
+          <a
+            href={`/p/${projectId}/admin/reviews`}
+            onClick={(e) => {
+              if (!connected || !connectedWallet) {
+                e.preventDefault();
+                setErr("Connect wallet in /dashboard to open admin pages.");
+                return;
+              }
+              if (!isOwner) {
+                e.preventDefault();
+                setErr("Owner only: admin reviews are restricted to the project owner wallet.");
+                return;
+              }
+            }}
+            style={{
+              ...styles.btnPrimary,
+              width: "100%",
+              opacity: !connected || !connectedWallet || !isOwner ? 0.6 : 1,
+            }}
+          >
             Admin Reviews
           </a>
+
           <a href="/dashboard" style={{ ...styles.btnBase, width: "100%" }}>
             Dashboard
           </a>
@@ -581,6 +701,15 @@ export default function ProjectMissionsPage() {
 
         {openCreate && (
           <div style={styles.cardBody}>
+            {/* ✅ owner lock hint（不改结构，只加一个小提示） */}
+            {createLocked && (
+              <div style={{ marginBottom: 12, ...styles.errorBox, borderColor: "#fde68a", background: "#fffbeb", color: "#92400e" }}>
+                {(!connected || !connectedWallet)
+                  ? "Connect wallet in /dashboard to create missions."
+                  : "Owner only: only the project owner wallet can create missions."}
+              </div>
+            )}
+
             <form onSubmit={onCreate} style={{ display: "grid", gap: 12 }}>
               <div style={{ display: "grid", gap: 8 }}>
                 <label style={styles.label}>Title</label>
@@ -588,7 +717,8 @@ export default function ProjectMissionsPage() {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g. Follow X / Join Telegram / Retweet"
-                  style={styles.input}
+                  style={{ ...styles.input, opacity: createLocked ? 0.75 : 1 }}
+                  disabled={createLocked}
                 />
               </div>
 
@@ -599,7 +729,8 @@ export default function ProjectMissionsPage() {
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Keep it short and verifiable."
                   rows={4}
-                  style={styles.textarea}
+                  style={{ ...styles.textarea, opacity: createLocked ? 0.75 : 1 }}
+                  disabled={createLocked}
                 />
               </div>
 
@@ -611,15 +742,21 @@ export default function ProjectMissionsPage() {
                   type="number"
                   min={1}
                   max={100000}
-                  style={styles.input}
+                  style={{ ...styles.input, opacity: createLocked ? 0.75 : 1 }}
+                  disabled={createLocked}
                 />
                 <div style={styles.hint}>MVP uses SIGN_MESSAGE proof only.</div>
               </div>
 
               <button
                 type="submit"
-                disabled={title.trim().length < 2}
-                style={{ ...styles.btnPrimary, opacity: title.trim().length < 2 ? 0.6 : 1, width: "100%" }}
+                disabled={createLocked || title.trim().length < 2}
+                style={{
+                  ...styles.btnPrimary,
+                  opacity: createLocked || title.trim().length < 2 ? 0.6 : 1,
+                  width: "100%",
+                  cursor: createLocked ? "not-allowed" : "pointer",
+                }}
               >
                 Create
               </button>

@@ -36,8 +36,10 @@ export default function ProjectsPage() {
   const { publicKey, connected } = useWallet();
   const ownerWallet = useMemo(() => publicKey?.toBase58() || "", [publicKey]);
 
-  const canEnter = connected && !!ownerWallet; // ✅ 不连接钱包：不能进入项目详情页（下一页）
-  const canCreate = canEnter; // ✅ 不连接钱包：不能创建项目
+  // ✅ 关键：不做 role 重定向；/projects 永远可打开
+  // 只在“动作层”做 gating：不连钱包不能 create / open
+  const canEnter = connected && !!ownerWallet;
+  const canCreate = canEnter;
 
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -72,7 +74,7 @@ export default function ProjectsPage() {
     setErr(null);
 
     if (!canCreate) {
-      setErr("Please connect your wallet first (owner) in /dashboard.");
+      setErr("Please connect your wallet first in /dashboard.");
       return;
     }
 
@@ -147,7 +149,7 @@ export default function ProjectsPage() {
                     Mobile-first
                   </span>
                   <span className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-gray-700">
-                    Gated by Wallet
+                    Wallet-required to create/open
                   </span>
                 </div>
 
@@ -155,13 +157,15 @@ export default function ProjectsPage() {
                   Projects
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">
-                  Step 1: connect wallet. Step 2: create project. Step 3: open project details.
-                  <span className="font-semibold text-gray-900"> No direct mission creation here.</span>
+                  Anyone can browse projects. Connect wallet to create a project.
+                  <span className="font-semibold text-gray-900">
+                    Owner-only restrictions are enforced inside the project details page.
+                  </span>
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   <span className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-gray-700">
-                    creator:{" "}
+                    wallet:{" "}
                     {canEnter ? (
                       <span className="font-black text-gray-900">{short(ownerWallet, 8)}</span>
                     ) : (
@@ -181,8 +185,7 @@ export default function ProjectsPage() {
                   <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
                     Wallet not connected. You can browse the list, but{" "}
                     <span className="font-black">cannot create projects</span> or{" "}
-                    <span className="font-black">open project details</span>.  
-                    Connect wallet in{" "}
+                    <span className="font-black">open project details</span>. Connect wallet in{" "}
                     <a href="/dashboard" className="underline font-black text-gray-900">
                       /dashboard
                     </a>
@@ -347,7 +350,7 @@ export default function ProjectsPage() {
             <div>
               <div className="text-sm font-extrabold text-gray-900">All Projects</div>
               <div className="mt-1 text-xs text-gray-600">
-                Next step is project details. Mission management happens inside the project.
+                Next step is project details. Owner-only actions are enforced inside that page.
               </div>
             </div>
             <div className="text-xs font-semibold text-gray-600">
@@ -417,7 +420,8 @@ export default function ProjectsPage() {
                       )}
                     </div>
 
-                    {/* ✅ 只允许进入项目详情页；未连接钱包 => 禁用 */}
+                    {/* ✅ 只在“连接钱包”层面锁：不再按 role 踢走
+                        ✅ Owner-only 管理放到 /projects/[id] 内部判定 */}
                     <div className="grid w-full grid-cols-1 gap-2 sm:w-auto">
                       {canEnter ? (
                         <a href={`/projects/${p.id}`} className={activePrimary}>
@@ -433,9 +437,8 @@ export default function ProjectsPage() {
                         </button>
                       )}
 
-                      {/* ✅ 不再提供这里直达 missions/admin 的入口（你要求的流程） */}
                       <div className="rounded-2xl border bg-gray-50 px-4 py-3 text-xs font-semibold text-gray-600">
-                        Next: open details → manage missions inside.
+                        Tip: anyone can view details; owner-only actions are enforced inside.
                       </div>
                     </div>
                   </div>

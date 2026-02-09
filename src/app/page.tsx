@@ -205,7 +205,9 @@ export default function HomePage() {
           pendingQueue:
             typeof j?.queue?.length === "number" ? j.queue.length : safeNumber(j.pendingQueue, prev.pendingQueue ?? 0),
           onchainRecords:
-            typeof j.finalizedCount === "number" ? j.finalizedCount : safeNumber(j.onchainRecords, prev.onchainRecords ?? 0),
+            typeof j.finalizedCount === "number"
+              ? j.finalizedCount
+              : safeNumber(j.onchainRecords, prev.onchainRecords ?? 0),
           lastError: j.lastError ? String(j.lastError) : undefined,
         }));
       }
@@ -403,11 +405,11 @@ export default function HomePage() {
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                 <span style={pillStyle(true)}>{phaseLabel}</span>
 
-                <span style={{ fontSize: 12, opacity: 0.75 }}>
+                <span style={{ fontSize: 12, opacity: 0.78 }}>
                   {lastUpdated ? <>Last updated: {fmtTime(lastUpdated)}</> : <>—</>}
                 </span>
 
-                <span style={{ fontSize: 12, opacity: 0.7 }}>
+                <span style={{ fontSize: 12, opacity: 0.72 }}>
                   · proofs source: <b>{proofSource}</b>
                 </span>
               </div>
@@ -418,12 +420,27 @@ export default function HomePage() {
                 Contribution → Identity → On-chain
               </h1>
 
-              <p style={{ marginTop: 12, fontSize: "clamp(14px, 2.2vw, 16px)", opacity: 0.85, maxWidth: 860, lineHeight: 1.6 }}>
-                A universal Proof-of-Contribution console for projects and users. Review remains human; the chain is the
-                permanent record.
+              <p style={{ marginTop: 12, fontSize: "clamp(14px, 2.2vw, 16px)", opacity: 0.86, maxWidth: 880, lineHeight: 1.65 }}>
+                A universal Proof-of-Contribution console for projects and users. Review remains human; the chain is the permanent record.
               </p>
 
-              {/* ✅ Hero shortcuts（加 One AI 入口） */}
+              {/* ✅ 对外解释（6 行，投资人/第三方一眼看懂） */}
+              <div style={externalBrief}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                  <div style={{ fontWeight: 950, fontSize: 13 }}>What is One Mission Universal?</div>
+                  <span style={badgePill}>permissioned infra</span>
+                </div>
+
+                <div style={{ marginTop: 10, display: "grid", gap: 6, fontSize: 13, lineHeight: 1.65, opacity: 0.92 }}>
+                  <div>One Mission Universal is a permissioned infrastructure for recording verified contribution.</div>
+                  <div>Projects define missions. Users submit proofs. Humans review.</div>
+                  <div>Approved proofs become the source of truth.</div>
+                  <div>On-chain records act as immutable receipts — not triggers.</div>
+                  <div>Rights (tokens, NFTs, governance weight) are assigned by policy, not by user actions.</div>
+                </div>
+              </div>
+
+              {/* ✅ Hero shortcuts */}
               <div style={{ marginTop: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <a href="/projects" style={btnPrimary}>
                   Create / Manage Projects
@@ -452,6 +469,11 @@ export default function HomePage() {
                 <button onClick={() => setTab("ACTIVITY")} style={chipStyle(tab === "ACTIVITY")}>
                   Activity
                 </button>
+              </div>
+
+              {/* ✅ 填补你截图里左侧“空档”：放一个轻量示意图/品牌位（不改任何数据/结构，只加展示块） */}
+              <div style={{ marginTop: 12 }}>
+                <HeroVisual />
               </div>
             </div>
 
@@ -524,6 +546,45 @@ export default function HomePage() {
                   This card can be powered by <code>/api/chain/status</code> (queue, sync, receipts).
                 </div>
               </div>
+
+              {/* ✅ Rights Binding（Universal）— 对外最值钱的表达：资产 live，但授予 policy 控制 */}
+              <div style={{ marginTop: 12, ...card }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+                  <div style={{ fontSize: 14, fontWeight: 950 }}>Rights Binding (Universal)</div>
+                  <div style={{ fontSize: 12, opacity: 0.65 }}>policy-driven</div>
+                </div>
+
+                <div style={{ marginTop: 10, fontSize: 13, opacity: 0.85, lineHeight: 1.6 }}>
+                  Eligibility is computed from verified proofs — rights are assigned by policy without changing history.
+                </div>
+
+                <div style={{ marginTop: 12, display: "grid", gap: 14 }}>
+                  <RightRow
+                    title="Governance / Reputation"
+                    desc="Approved proofs contribute to universal reputation and governance weight."
+                    pill={{ text: "Active", variant: "green" }}
+                  />
+
+                  <RightRow
+                    title="Token Eligibility"
+                    desc="Token is live on-chain. Eligibility is determined by verified proofs and system policy."
+                    pill={{ text: "Live (Policy-Gated)", variant: "amber" }}
+                  />
+
+                  <RightRow
+                    title="NFT / Credential"
+                    desc="NFT collection is deployed. Minting remains permissioned and bound to verified proofs."
+                    pill={{ text: "Live (Permissioned)", variant: "amber" }}
+                  />
+                </div>
+
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #f3f4f6" }}>
+                  <div style={{ fontSize: 12, fontWeight: 950, opacity: 0.78 }}>System principle</div>
+                  <div style={{ marginTop: 6, fontSize: 13, opacity: 0.85, lineHeight: 1.6 }}>
+                    Assets are live. Distribution is policy-gated. Proof is the source of truth.
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -536,7 +597,9 @@ export default function HomePage() {
           <section style={{ marginTop: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
               <div style={{ fontSize: 16, fontWeight: 950 }}>System map</div>
-              <div style={{ fontSize: 13, opacity: 0.75 }}>Operational console · On-chain record as the source of truth</div>
+              <div style={{ fontSize: 13, opacity: 0.75 }}>
+                Operational console · Proof is the source of truth, on-chain is the receipt
+              </div>
             </div>
 
             <div style={{ marginTop: 10 }}>
@@ -551,7 +614,6 @@ export default function HomePage() {
               <div style={{ fontSize: 13, opacity: 0.75 }}>Shortcuts · keep homepage fast & small</div>
             </div>
 
-            {/* ✅ 修正：这里不能自闭合，必须包 ActionCard */}
             <div
               style={{
                 marginTop: 10,
@@ -560,7 +622,6 @@ export default function HomePage() {
                 gap: 12,
               }}
             >
-              {/* ✅ One AI 入口卡（放最前） */}
               <ActionCard
                 title="One AI · Contribution Draft"
                 desc="Turn real actions into structured drafts. No points. No submission required."
@@ -644,15 +705,24 @@ export default function HomePage() {
                       const pn = maps.projName.get(p.projectId) || p.projectId;
                       const mt = maps.missionTitle.get(p.missionId) || p.missionId;
 
+                      // ✅ 最小改动：不给后端添负担，只用 currentStatus 推断对外展示的 rights 状态
+                      const rights =
+                        p.currentStatus === "APPROVED"
+                          ? { text: "Rights: Eligible (policy)", tone: "green" as const }
+                          : p.currentStatus === "REJECTED"
+                          ? { text: "Rights: Not eligible", tone: "red" as const }
+                          : { text: "Rights: Pending", tone: "amber" as const };
+
                       return (
                         <div key={p.id} style={proofRow}>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontWeight: 950, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                               <span style={{ fontFamily: "monospace" }}>{fmtShortAddress(p.wallet, 6)}</span>
                               {p.currentStatus && <span style={statusPillStyle(p.currentStatus)}>{p.currentStatus}</span>}
+                              <span style={rightsPill(rights.tone)}>{rights.text}</span>
                             </div>
 
-                            <div style={{ marginTop: 6, fontSize: 13, opacity: 0.8, lineHeight: 1.5 }}>
+                            <div style={{ marginTop: 6, fontSize: 13, opacity: 0.82, lineHeight: 1.5 }}>
                               <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                 project: <b>{pn}</b>
                               </div>
@@ -665,7 +735,7 @@ export default function HomePage() {
                             </div>
                           </div>
 
-                          <div style={{ fontSize: 12, opacity: 0.75, textAlign: "right", flexShrink: 0 }}>
+                          <div style={{ fontSize: 12, opacity: 0.76, textAlign: "right", flexShrink: 0 }}>
                             {fmtTime(p.createdAt)}
                             <div style={{ marginTop: 8 }}>
                               <span style={pillStyle(true)}>{p.chainStatus ? "ON-CHAIN" : "VERIFIED"}</span>
@@ -680,7 +750,7 @@ export default function HomePage() {
             </div>
           </section>
 
-          {/* ✅ 更高级黑框 CTA + 底部版权 */}
+          {/* CTA */}
           <section style={{ marginTop: 18 }}>
             <FinalCta mode={chainStatus.mode} />
           </section>
@@ -729,15 +799,23 @@ export default function HomePage() {
                     const pn = maps.projName.get(p.projectId) || p.projectId;
                     const mt = maps.missionTitle.get(p.missionId) || p.missionId;
 
+                    const rights =
+                      p.currentStatus === "APPROVED"
+                        ? { text: "Rights: Eligible (policy)", tone: "green" as const }
+                        : p.currentStatus === "REJECTED"
+                        ? { text: "Rights: Not eligible", tone: "red" as const }
+                        : { text: "Rights: Pending", tone: "amber" as const };
+
                     return (
                       <div key={p.id} style={proofRow}>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontWeight: 950, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                             <span style={{ fontFamily: "monospace" }}>{fmtShortAddress(p.wallet, 6)}</span>
                             {p.currentStatus && <span style={statusPillStyle(p.currentStatus)}>{p.currentStatus}</span>}
+                            <span style={rightsPill(rights.tone)}>{rights.text}</span>
                           </div>
 
-                          <div style={{ marginTop: 6, fontSize: 13, opacity: 0.8, lineHeight: 1.5 }}>
+                          <div style={{ marginTop: 6, fontSize: 13, opacity: 0.82, lineHeight: 1.5 }}>
                             <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                               project: <b>{pn}</b>
                             </div>
@@ -753,7 +831,7 @@ export default function HomePage() {
                           </div>
                         </div>
 
-                        <div style={{ fontSize: 12, opacity: 0.75, textAlign: "right", flexShrink: 0 }}>
+                        <div style={{ fontSize: 12, opacity: 0.76, textAlign: "right", flexShrink: 0 }}>
                           {fmtTime(p.createdAt)}
                           <div style={{ marginTop: 8 }}>
                             <a href="/profile" style={{ ...miniLink, marginRight: 10 }}>
@@ -916,6 +994,180 @@ function ActionCard(props: {
   );
 }
 
+/* ---------- Hero Visual (fills the blank area) ---------- */
+
+function HeroVisual() {
+  const [logoOk, setLogoOk] = React.useState(true);
+
+  return (
+    <div style={heroVisual}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontWeight: 950, fontSize: 13 }}>Universal Proof → Policy → Rights</div>
+          <div style={{ marginTop: 4, fontSize: 12, opacity: 0.78, lineHeight: 1.5 }}>
+            A compact view for external visitors: verified proofs become receipts, policy assigns eligibility.
+          </div>
+        </div>
+        <span style={badgePill}>visual cue</span>
+      </div>
+
+      <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+        {/* Pipeline */}
+        <div style={heroVisualBox}>
+          <div style={{ fontSize: 12, fontWeight: 950, opacity: 0.78 }}>Pipeline</div>
+
+          <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <span style={miniPill}>Project</span>
+            <span style={arrow}>→</span>
+            <span style={miniPill}>Mission</span>
+            <span style={arrow}>→</span>
+            <span style={miniPill}>Proof</span>
+            <span style={arrow}>→</span>
+            <span style={miniPill}>Review</span>
+            <span style={arrow}>→</span>
+            <span style={miniPill}>Receipt</span>
+          </div>
+
+          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.76, lineHeight: 1.55 }}>
+            Receipt is immutable; it’s not auto-distribution.
+          </div>
+        </div>
+
+        {/* Rights mapping */}
+        <div style={heroVisualBox}>
+          <div style={{ fontSize: 12, fontWeight: 950, opacity: 0.78 }}>Rights mapping</div>
+
+          <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+              <span style={{ fontSize: 12, opacity: 0.8 }}>Token eligibility</span>
+              <span style={rightPill("amber")}>Policy-gated</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+              <span style={{ fontSize: 12, opacity: 0.8 }}>NFT / credential</span>
+              <span style={rightPill("amber")}>Permissioned</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+              <span style={{ fontSize: 12, opacity: 0.8 }}>Reputation</span>
+              <span style={rightPill("green")}>Active</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ✅ Brand slot（结构不变：还是 heroVisualBox + 内部 flex） */}
+        <div style={heroVisualBox}>
+          <div style={{ fontSize: 12, fontWeight: 950, opacity: 0.78 }}>Brand slot</div>
+
+          <div style={{ marginTop: 8, display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={logoMark} aria-hidden>
+              {logoOk ? (
+                <img
+                  src="/brand/waoc-logo.svg"
+                  alt="WAOC"
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                    display: "block",
+                    padding: 6, // 关键：让透明边距更不影响观感
+                  }}
+                  onError={(e) => {
+                    const img = e.currentTarget as HTMLImageElement;
+                    // SVG 失败 → 尝试 PNG
+                    if (!img.dataset.fallback) {
+                      img.dataset.fallback = "1";
+                      img.src = "/brand/waoc-logo.png";
+                      return;
+                    }
+                    // PNG 也失败 → 用内置 mark
+                    setLogoOk(false);
+                  }}
+                />
+              ) : (
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style={{ display: "block" }}>
+                  <circle cx="12" cy="12" r="9" stroke="#111827" strokeWidth="1.6" opacity="0.25" />
+                  <circle cx="12" cy="12" r="6" stroke="#111827" strokeWidth="1.6" opacity="0.45" />
+                  <path d="M7.5 12h9" stroke="#111827" strokeWidth="1.8" strokeLinecap="round" />
+                  <path d="M12 7.5v9" stroke="#111827" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              )}
+            </div>
+
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 950, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                WAOC · One Mission Universal
+              </div>
+
+              {/* ✅ 对外文案（替换开发提示） */}
+              <div style={{ marginTop: 4, fontSize: 12, opacity: 0.78, lineHeight: 1.5 }}>
+                Official identity mark · Proofs become receipts · Rights are policy-driven.
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginTop: 10,
+              paddingTop: 10,
+              borderTop: "1px solid #f3f4f6",
+              fontSize: 12,
+              opacity: 0.76,
+              lineHeight: 1.55,
+            }}
+          >
+            This identity applies across all missions and proofs under the Universal system.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Rights rows ---------- */
+
+function RightRow(props: {
+  title: string;
+  desc: string;
+  pill: { text: string; variant: "green" | "amber" | "gray" };
+}) {
+  return (
+    <div style={{ display: "grid", gap: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ fontWeight: 950 }}>{props.title}</div>
+        <span style={rightPill(props.pill.variant)}>{props.pill.text}</span>
+      </div>
+      <div style={{ fontSize: 13, opacity: 0.82, lineHeight: 1.6 }}>{props.desc}</div>
+    </div>
+  );
+}
+
+function rightPill(v: "green" | "amber" | "gray"): React.CSSProperties {
+  const base: React.CSSProperties = {
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid #e5e7eb",
+    fontWeight: 950,
+    fontSize: 12,
+    whiteSpace: "nowrap",
+  };
+  if (v === "green") return { ...base, borderColor: "#bbf7d0", background: "#f0fdf4", color: "#166534" };
+  if (v === "amber") return { ...base, borderColor: "#fde68a", background: "#fffbeb", color: "#92400e" };
+  return { ...base, borderColor: "#e5e7eb", background: "#f9fafb", color: "#111827" };
+}
+
+function rightsPill(tone: "green" | "amber" | "red"): React.CSSProperties {
+  const base: React.CSSProperties = {
+    padding: "6px 10px",
+    borderRadius: 999,
+    border: "1px solid #e5e7eb",
+    fontWeight: 950,
+    fontSize: 12,
+    whiteSpace: "nowrap",
+  };
+  if (tone === "green") return { ...base, borderColor: "#bbf7d0", background: "#f0fdf4", color: "#166534" };
+  if (tone === "red") return { ...base, borderColor: "#fecaca", background: "#fef2f2", color: "#991b1b" };
+  return { ...base, borderColor: "#fde68a", background: "#fffbeb", color: "#92400e" };
+}
+
 /* ---------- System Map ---------- */
 
 function SystemMap({ mode }: { mode: "OFFCHAIN" | "PREPARING" | "ONCHAIN" }) {
@@ -1058,6 +1310,57 @@ const heroWrap: React.CSSProperties = {
     "radial-gradient(1200px 420px at 20% 0%, rgba(17,24,39,0.10), transparent), radial-gradient(800px 300px at 90% 20%, rgba(17,24,39,0.06), transparent)",
 };
 
+const externalBrief: React.CSSProperties = {
+  marginTop: 14,
+  border: "1px solid #e5e7eb",
+  borderRadius: 16,
+  padding: 14,
+  background: "rgba(255,255,255,0.85)",
+  backdropFilter: "blur(6px)",
+};
+
+const heroVisual: React.CSSProperties = {
+  marginTop: 12,
+  border: "1px solid #e5e7eb",
+  borderRadius: 18,
+  padding: 14,
+  background: "rgba(255,255,255,0.82)",
+  backdropFilter: "blur(6px)",
+};
+
+const heroVisualBox: React.CSSProperties = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 16,
+  padding: 12,
+  background: "linear-gradient(180deg, #ffffff, #fbfbfb)",
+};
+
+const logoMark: React.CSSProperties = {
+  width: 48,
+  height: 48,
+  borderRadius: 14,
+  border: "1px solid #e5e7eb",
+  background: "#f9fafb",
+  display: "grid",
+  placeItems: "center",
+  flexShrink: 0,
+  overflow: "hidden",
+  boxShadow: "0 1px 0 rgba(17,24,39,0.04)",
+};
+
+
+const miniPill: React.CSSProperties = {
+  padding: "6px 10px",
+  borderRadius: 999,
+  border: "1px solid #e5e7eb",
+  background: "#f9fafb",
+  fontWeight: 950,
+  fontSize: 12,
+  whiteSpace: "nowrap",
+};
+
+const arrow: React.CSSProperties = { opacity: 0.6, fontWeight: 950, fontSize: 12 };
+
 const card: React.CSSProperties = {
   border: "1px solid #e5e7eb",
   borderRadius: 16,
@@ -1130,7 +1433,7 @@ const badgePill: React.CSSProperties = {
   borderRadius: 999,
   border: "1px solid #e5e7eb",
   background: "#f9fafb",
-  opacity: 0.9,
+  opacity: 0.95,
 };
 
 const btnPrimary: React.CSSProperties = {
@@ -1280,6 +1583,7 @@ const sysPipe: React.CSSProperties = {
   gap: 10,
   flexWrap: "wrap",
   alignItems: "center",
+  overflowX: "auto", // ✅ 小屏更友好（不改结构）
 };
 
 const pipePill: React.CSSProperties = {
@@ -1291,7 +1595,7 @@ const pipePill: React.CSSProperties = {
   fontSize: 12,
 };
 
-/* ✅ Upgraded Final CTA styles */
+/* Final CTA styles */
 const ctaWrap: React.CSSProperties = {
   borderRadius: 20,
   padding: "clamp(14px, 3vw, 18px)",
@@ -1335,4 +1639,28 @@ const ctaGhost: React.CSSProperties = {
   color: "white",
   fontWeight: 950,
   textDecoration: "none",
+};
+const brandSlot: React.CSSProperties = {
+  display: "flex",
+  gap: 14,
+  alignItems: "center",
+};
+
+const brandLogoWrap: React.CSSProperties = {
+  width: 48,
+  height: 48,
+  borderRadius: 14,
+  border: "1px solid #e5e7eb",
+  background: "#f9fafb",
+  display: "grid",
+  placeItems: "center",
+  flexShrink: 0,
+};
+
+const brandLogo: React.CSSProperties = {
+  width: "100%",
+  height: "100%",
+  objectFit: "contain",
+  padding: 6,          // ⭐ 非常重要：吃掉 SVG 透明边
+  display: "block",
 };
