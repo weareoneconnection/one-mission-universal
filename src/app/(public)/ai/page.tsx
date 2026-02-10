@@ -3,11 +3,12 @@ import AiChat from "@/components/ai/AiChat";
 export default function AiPage() {
   return (
     <div className="min-h-[calc(100vh-64px)] bg-gradient-to-b from-white via-white to-slate-50">
-      <div className="mx-auto max-w-5xl px-4 py-6 sm:py-10">
+      <div className="mx-auto max-w-5xl px-4 py-5 sm:py-10">
         {/* Header */}
         <div className="mb-5 sm:mb-7">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
+              {/* top pills */}
               <div className="flex flex-wrap items-center gap-2">
                 <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
                   <span className="h-2 w-2 rounded-full bg-emerald-500" />
@@ -47,7 +48,9 @@ export default function AiPage() {
                   </div>
                   <div className="flex gap-2">
                     <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-900" />
-                    <span>Drafts start <b>PRIVATE</b>; publish only when ready.</span>
+                    <span>
+                      Drafts start <b>PRIVATE</b>; publish only when ready.
+                    </span>
                   </div>
                 </div>
               </div>
@@ -85,25 +88,26 @@ export default function AiPage() {
           <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <div className="text-sm font-semibold text-slate-900">Workspace</div>
-              <div className="text-xs text-slate-600">
-                Create drafts → edit → sign & submit (MVP).
-              </div>
+              <div className="text-xs text-slate-600">Create drafts → edit → sign & submit (MVP).</div>
             </div>
 
             {/* Quick examples */}
-            <div className="flex flex-wrap gap-2">
-              <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
-                Examples
-              </span>
-              <span className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-                “Fixed route.ts bug and deployed.”
-              </span>
-              <span className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-                “Wrote docs + added tests.”
-              </span>
-              <span className="hidden md:inline-flex rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-                “Reviewed PRs + shipped UI polish.”
-              </span>
+            {/* ✅ Mobile: allow horizontal scroll instead of wrapping into ugly multi-lines */}
+            <div className="-mx-4 sm:mx-0">
+              <div className="flex gap-2 overflow-x-auto px-4 sm:px-0 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <span className="shrink-0 rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
+                  Examples
+                </span>
+                <span className="shrink-0 rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                  “Fixed route.ts bug and deployed.”
+                </span>
+                <span className="shrink-0 rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                  “Wrote docs + added tests.”
+                </span>
+                <span className="shrink-0 rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                  “Reviewed PRs + shipped UI polish.”
+                </span>
+              </div>
             </div>
           </div>
 
@@ -126,17 +130,15 @@ export default function AiPage() {
 
           <ul className="mt-3 space-y-2 text-sm text-slate-600">
             <li className="leading-relaxed">
-              • If you see <span className="font-semibold text-slate-900">NETWORK_OR_SERVER_ERROR</span>, open DevTools →
-              Network → check <span className="font-semibold text-slate-900">/api/ai</span> response.
+              • If you see <span className="font-semibold text-slate-900">NETWORK_OR_SERVER_ERROR</span>, open DevTools → Network → check{" "}
+              <span className="font-semibold text-slate-900">/api/ai</span> response.
             </li>
             <li className="leading-relaxed">
-              • If a draft appears but the UI crashes, it’s usually a front-end field path mismatch
-              (old <span className="font-semibold text-slate-900">assessment</span> vs new{" "}
+              • If a draft appears but the UI crashes, it’s usually a front-end field path mismatch (old{" "}
+              <span className="font-semibold text-slate-900">assessment</span> vs new{" "}
               <span className="font-semibold text-slate-900">draft.assessment</span>).
             </li>
-            <li className="leading-relaxed">
-              • Keep the tone calm: no token talk, no price, no promo language.
-            </li>
+            <li className="leading-relaxed">• Keep the tone calm: no token talk, no price, no promo language.</li>
           </ul>
         </div>
       </div>

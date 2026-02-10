@@ -364,7 +364,10 @@ function explorerTxUrl(cluster: string, sig: string) {
 
 export default function ProfilePage() {
   const { publicKey, connected } = useWallet();
+
+  // ✅ 修复 mobile 钱包状态：connected 在 iOS/内置浏览器可能为 true 但 publicKey 仍为空
   const wallet = useMemo(() => (publicKey ? publicKey.toBase58() : ""), [publicKey]);
+  const walletReady = !!publicKey; // ✅ 以 publicKey 作为唯一可信 ready 信号
 
   const [loading, setLoading] = useState(false);
   const [proofs, setProofs] = useState<Proof[]>([]);
@@ -382,7 +385,7 @@ export default function ProfilePage() {
 
   async function load() {
     setErr(null);
-    if (!wallet) {
+    if (!walletReady || !wallet) {
       setProofs([]);
       setSummary(null);
       return;
@@ -441,7 +444,7 @@ export default function ProfilePage() {
 
   async function loadOnchain() {
     setOnchainErr(null);
-    if (!wallet) {
+    if (!walletReady || !wallet) {
       setOnchain(null);
       return;
     }
@@ -464,11 +467,47 @@ export default function ProfilePage() {
     }
   }
 
+  // ✅ 修复：chainStatus 之前未加载，Chain Receipts 永远 0
+  async function loadChainStatus() {
+    try {
+      const j = await fetch("/api/chain/status", { cache: "no-store" }).then((r) => r.json());
+      if (j?.ok) setChainStatus(j);
+    } catch {}
+  }
+
+  // ✅ 修复 mobile race：publicKey 变更会有短暂 null → value，延迟 250ms 避免 UI 抖动/误判
   useEffect(() => {
-    load();
-    loadOnchain();
+    if (!walletReady || !wallet) {
+      setProofs([]);
+      setSummary(null);
+      setOnchain(null);
+      setChainStatus(null);
+      return;
+    }
+
+    const t = setTimeout(() => {
+      load();
+      loadOnchain();
+      loadChainStatus();
+    }, 250);
+
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wallet]);
+  }, [walletReady, wallet]);
+
+  // ✅ iOS Safari/内置浏览器返回页面有缓存：pageshow 时补刷一次
+  useEffect(() => {
+    const onShow = () => {
+      if (walletReady && wallet) {
+        load();
+        loadOnchain();
+        loadChainStatus();
+      }
+    };
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletReady, wallet]);
 
   /* =========================
      Stats（逻辑不变，只更健壮）
@@ -570,7 +609,7 @@ export default function ProfilePage() {
     const repOk = Math.abs(diffRep) <= 0;
 
     let status: "SYNCED" | "OUT_OF_SYNC" | "UNKNOWN" = "UNKNOWN";
-    if (!wallet) status = "UNKNOWN";
+    if (!walletReady || !wallet) status = "UNKNOWN";
     else if (!onchain) status = "UNKNOWN";
     else if (pointsOk && repOk) status = "SYNCED";
     else status = "OUT_OF_SYNC";
@@ -582,25 +621,27 @@ export default function ProfilePage() {
       diffRep,
       status,
     };
-  }, [wallet, onchain, chainPoints, chainRep, stats.offchainApprovedPoints, stats.offchainReputation]);
+  }, [walletReady, wallet, onchain, chainPoints, chainRep, stats.offchainApprovedPoints, stats.offchainReputation]);
 
   const identityPill = useMemo(() => {
-    if (!connected || !wallet) return onchainPill("NEUTRAL", "WALLET DISCONNECTED");
+    // ✅ 修复：不用 connected，改用 walletReady
+    if (!walletReady || !wallet) return onchainPill("NEUTRAL", "WALLET DISCONNECTED");
     if (onchainLoading) return onchainPill("NEUTRAL", "LOADING");
     if (onchainErr) return onchainPill("BAD", "ON-CHAIN ERROR");
     if (!onchain) return onchainPill("NEUTRAL", "UNKNOWN");
     if (!identity?.initialized) return onchainPill("WARN", "NOT INITIALIZED");
     return onchainPill("OK", "INITIALIZED");
-  }, [connected, wallet, onchainLoading, onchainErr, onchain, identity?.initialized]);
+  }, [walletReady, wallet, onchainLoading, onchainErr, onchain, identity?.initialized]);
 
   const syncPill = useMemo(() => {
-    if (!connected || !wallet) return onchainPill("NEUTRAL", "SYNC UNKNOWN");
+    // ✅ 修复：不用 connected，改用 walletReady
+    if (!walletReady || !wallet) return onchainPill("NEUTRAL", "SYNC UNKNOWN");
     if (onchainLoading) return onchainPill("NEUTRAL", "SYNC CHECKING");
     if (onchainErr) return onchainPill("BAD", "SYNC ERROR");
     if (derivedSync.status === "SYNCED") return onchainPill("OK", "SYNCED");
     if (derivedSync.status === "OUT_OF_SYNC") return onchainPill("WARN", "OUT OF SYNC");
     return onchainPill("NEUTRAL", "UNKNOWN");
-  }, [connected, wallet, onchainLoading, onchainErr, derivedSync.status]);
+  }, [walletReady, wallet, onchainLoading, onchainErr, derivedSync.status]);
 
   const levelValue = useMemo(() => {
     const lv = Number(identity?.level ?? 0);
@@ -642,7 +683,7 @@ export default function ProfilePage() {
             ) : (
               <span style={{ color: "#b91c1c", fontWeight: 900 }}>not connected</span>
             )}
-            {connected && wallet && <span style={{ fontSize: 12, opacity: 0.7 }}>· proofs are scoped to this wallet</span>}
+            {walletReady && wallet && <span style={{ fontSize: 12, opacity: 0.7 }}>· proofs are scoped to this wallet</span>}
           </div>
         </div>
 
@@ -668,6 +709,7 @@ export default function ProfilePage() {
             onClick={() => {
               load();
               loadOnchain();
+              loadChainStatus(); // ✅ Refresh 同步刷新 chain status
             }}
             className="actionBtn"
             style={{
@@ -744,7 +786,10 @@ export default function ProfilePage() {
                 {identityPill}
                 {syncPill}
                 <button
-                  onClick={loadOnchain}
+                  onClick={() => {
+                    loadOnchain();
+                    loadChainStatus(); // ✅ 这里顺便刷新
+                  }}
                   className="actionBtn"
                   style={{
                     padding: "10px 14px",
@@ -789,7 +834,7 @@ export default function ProfilePage() {
                 hint={
                   identity?.identityPda
                     ? `PDA ${shortWallet(identity.identityPda)}`
-                    : connected && wallet
+                    : walletReady && wallet
                       ? "Create your on-chain identity once"
                       : "Connect wallet to view"
                 }
@@ -1039,7 +1084,7 @@ export default function ProfilePage() {
 
       {/* Content */}
       <section style={{ marginTop: 16 }}>
-        {!connected || !wallet ? (
+        {!walletReady || !wallet ? (
           emptyBox("Connect your wallet to view your proofs", "Your profile is wallet-based. Proofs are scoped to your wallet.")
         ) : loading ? (
           <div style={{ fontWeight: 950, padding: 8 }}>Loading…</div>
@@ -1322,52 +1367,52 @@ export default function ProfilePage() {
             grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
           }
         }
+
         /* ===== Mobile compact for Accounts / Recent activity (no structure change) ===== */
         @media (max-width: 640px) {
-        /* details 内部卡片整体更紧凑 */
-        details > div {
-        gap: 10px !important;
-       }
+          /* details 内部卡片整体更紧凑 */
+          details > div {
+            gap: 10px !important;
+          }
 
-        /* Accounts / Recent 的每行：从左右变上下 */
-        .rowCard {
-        flex-direction: column !important;
-        align-items: stretch !important;
-        gap: 8px !important;
-        padding: 10px 12px !important;
+          /* Accounts / Recent 的每行：从左右变上下 */
+          .rowCard {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 8px !important;
+            padding: 10px 12px !important;
+          }
+
+          /* 行内左侧内容确保可截断 */
+          .rowCard > div {
+            min-width: 0 !important;
+          }
+
+          /* 右侧 View 链接：手机端变按钮样式 */
+          .rowCard > a {
+            align-self: flex-end !important;
+            text-decoration: none !important;
+            font-weight: 950 !important;
+            font-size: 12px !important;
+            padding: 8px 10px !important;
+            border-radius: 12px !important;
+            border: 1px solid #e5e7eb !important;
+            background: #ffffff !important;
+          }
+
+          /* 代码块更像“标签”，并且不撑爆 */
+          .rowCard code {
+            display: inline-block !important;
+            max-width: 100% !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+            padding: 2px 6px !important;
+            border-radius: 10px !important;
+            border: 1px solid #e5e7eb !important;
+            background: #f9fafb !important;
+          }
         }
-
-        /* 行内左侧内容（你已有 minWidth:0 的那个 div）确保可截断 */
-       .rowCard > div {
-        min-width: 0 !important;
-        }
-
-        /* 右侧 View 链接：手机端变按钮样式，避免挤压 */
-        .rowCard > a {
-        align-self: flex-end !important;
-        text-decoration: none !important;
-        font-weight: 950 !important;
-        font-size: 12px !important;
-        padding: 8px 10px !important;
-        border-radius: 12px !important;
-        border: 1px solid #e5e7eb !important;
-        background: #ffffff !important;
-      }
-
-         /* 代码块更像“标签”，并且不撑爆 */
-        .rowCard code {
-        display: inline-block !important;
-        max-width: 100% !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-        white-space: nowrap !important;
-        padding: 2px 6px !important;
-        border-radius: 10px !important;
-        border: 1px solid #e5e7eb !important;
-        background: #f9fafb !important;
-       }
-      }
-
       `}</style>
     </main>
   );

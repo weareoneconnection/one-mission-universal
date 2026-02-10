@@ -237,7 +237,8 @@ export default function MissionsExplorePage() {
     maxWidth: 1060,
     margin: "0 auto",
     boxSizing: "border-box",
-    paddingBottom: isMobile ? 120 : 32,
+    // ✅ 手机底部留更多空间给 sticky bar（含 safe-area）
+    paddingBottom: isMobile ? "calc(132px + env(safe-area-inset-bottom, 0px))" : 32,
   };
 
   const hero: React.CSSProperties = {
@@ -261,6 +262,7 @@ export default function MissionsExplorePage() {
     fontSize: 12,
     whiteSpace: "nowrap",
     boxSizing: "border-box",
+    maxWidth: "100%",
   };
 
   const btn: React.CSSProperties = {
@@ -279,6 +281,8 @@ export default function MissionsExplorePage() {
     justifyContent: "center",
     gap: 8,
     WebkitTapHighlightColor: "transparent",
+    // ✅ 小屏避免按钮挤压导致文字换行怪异
+    whiteSpace: "nowrap",
   };
 
   const btnPrimary: React.CSSProperties = {
@@ -320,6 +324,8 @@ export default function MissionsExplorePage() {
     userSelect: "none",
     background:
       "radial-gradient(900px 220px at 20% 0%, rgba(15,23,42,0.05), transparent), linear-gradient(180deg, #fff, #fbfbfb)",
+    // ✅ iOS 点击更稳
+    WebkitTapHighlightColor: "transparent",
   };
 
   const missionCard: React.CSSProperties = {
@@ -330,6 +336,8 @@ export default function MissionsExplorePage() {
     boxShadow: "0 8px 22px rgba(15,23,42,0.05)",
     display: "grid",
     gap: 10,
+    // ✅ 防止长文本撑爆
+    minWidth: 0,
   };
 
   const metaRow: React.CSSProperties = {
@@ -387,7 +395,9 @@ export default function MissionsExplorePage() {
             This wallet is a <b>project owner</b>. Missions are for users. Redirecting to <b>/projects</b>.
           </div>
           <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <a href="/projects" style={btnPrimary}>Go to Projects</a>
+            <a href="/projects" style={btnPrimary}>
+              Go to Projects
+            </a>
           </div>
         </section>
       </main>
@@ -445,7 +455,8 @@ export default function MissionsExplorePage() {
                 marginTop: 12,
                 display: "grid",
                 gap: 10,
-                gridTemplateColumns: isMobile ? "1fr 1fr" : "auto auto auto auto auto",
+                // ✅ 手机下更稳定：第一行两列按钮，搜索独占一行（结构不变，只是布局更“稳”）
+                gridTemplateColumns: isMobile ? "1fr 1fr" : "auto auto auto auto auto 1fr",
                 alignItems: "stretch",
               }}
             >
@@ -458,18 +469,32 @@ export default function MissionsExplorePage() {
                   gridColumn: isMobile ? "1 / -1" : undefined,
                 }}
               >
-                <input type="checkbox" checked={activeOnly} onChange={(e) => setActiveOnly(e.target.checked)} style={{ width: 18, height: 18 }} />
+                <input
+                  type="checkbox"
+                  checked={activeOnly}
+                  onChange={(e) => setActiveOnly(e.target.checked)}
+                  style={{ width: 18, height: 18 }}
+                />
                 <span style={{ fontWeight: 950, fontSize: 13 }}>Active only</span>
               </label>
 
-              <button onClick={() => openAll(true)} style={btn}>Expand</button>
-              <button onClick={() => openAll(false)} style={btn}>Collapse</button>
+              <button onClick={() => openAll(true)} style={{ ...btn, width: "100%" }}>
+                Expand
+              </button>
+              <button onClick={() => openAll(false)} style={{ ...btn, width: "100%" }}>
+                Collapse
+              </button>
 
               {/* ✅ USER 区不应该给 Projects/Dashboard（不乱结构：保留按钮位，但改成 Gate / Profile 更合理） */}
-              <a href="/profile" style={btn}>Profile</a>
-              <a href="/gate" style={btn}>Switch</a>
+              <a href="/profile" style={{ ...btn, width: "100%" }}>
+                Profile
+              </a>
+              <a href="/gate" style={{ ...btn, width: "100%" }}>
+                Switch
+              </a>
 
-              <div style={{ gridColumn: isMobile ? "1 / -1" : "auto", width: "100%" }}>
+              {/* ✅ 顶部搜索：手机下保留但弱化（主要用底部 sticky 搜索更顺） */}
+              <div style={{ gridColumn: isMobile ? "1 / -1" : "auto", width: "100%", opacity: isMobile ? 0.88 : 1 }}>
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title / description / project / id…" style={input} />
               </div>
             </div>
@@ -490,7 +515,9 @@ export default function MissionsExplorePage() {
               >
                 Wallet not connected. You can browse missions, but <b>cannot open</b> mission pages or submit proofs.
                 <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <a href="/dashboard" style={btnPrimary}>Connect Wallet</a>
+                  <a href="/dashboard" style={btnPrimary}>
+                    Connect Wallet
+                  </a>
                 </div>
               </div>
             )}
@@ -542,7 +569,17 @@ export default function MissionsExplorePage() {
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 950, fontSize: 14, color: "#0f172a" }}>
                         Project{" "}
-                        <span style={{ fontFamily: "ui-monospace, Menlo, monospace", opacity: 0.9 }}>
+                        <span
+                          style={{
+                            fontFamily: "ui-monospace, Menlo, monospace",
+                            opacity: 0.9,
+                            display: "inline-block",
+                            maxWidth: "100%",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            verticalAlign: "bottom",
+                          }}
+                        >
                           {short(pid, 10)}
                         </span>
                       </div>
@@ -590,7 +627,15 @@ export default function MissionsExplorePage() {
                           {/* Title + status */}
                           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
                             <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: 15, fontWeight: 950, lineHeight: 1.25, color: "#0f172a", wordBreak: "break-word" }}>
+                              <div
+                                style={{
+                                  fontSize: 15,
+                                  fontWeight: 950,
+                                  lineHeight: 1.25,
+                                  color: "#0f172a",
+                                  wordBreak: "break-word",
+                                }}
+                              >
                                 {m.title}
                               </div>
                               <div style={{ marginTop: 6, ...metaRow }}>
@@ -603,14 +648,12 @@ export default function MissionsExplorePage() {
                               </div>
                             </div>
 
-                            <span style={m.active ? statusPill("ACTIVE") : statusPill("INACTIVE")}>
-                              {m.active ? "ACTIVE" : "INACTIVE"}
-                            </span>
+                            <span style={m.active ? statusPill("ACTIVE") : statusPill("INACTIVE")}>{m.active ? "ACTIVE" : "INACTIVE"}</span>
                           </div>
 
                           {/* Description */}
                           {m.description && (
-                            <div style={{ fontSize: 13, lineHeight: 1.65, color: "#0f172a", opacity: 0.9 }}>
+                            <div style={{ fontSize: 13, lineHeight: 1.65, color: "#0f172a", opacity: 0.9, wordBreak: "break-word" }}>
                               {m.description}
                             </div>
                           )}
@@ -618,8 +661,7 @@ export default function MissionsExplorePage() {
                           {/* Small meta */}
                           <div style={{ fontSize: 12, color: "#475569", opacity: 0.9 }}>
                             project:{" "}
-                            <span style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>{short(m.projectId, 10)}</span>{" "}
-                            · id:{" "}
+                            <span style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>{short(m.projectId, 10)}</span> · id:{" "}
                             <span style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>{short(m.id, 10)}</span>
                           </div>
 
@@ -650,14 +692,14 @@ export default function MissionsExplorePage() {
 
       {/* Mobile sticky bottom bar */}
       {isMobile && (
-        <div style={{ position: "fixed", left: 0, right: 0, bottom: 12, padding: "0 12px" }}>
+        <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, padding: "0 12px calc(12px + env(safe-area-inset-bottom, 0px))" }}>
           <div
             style={{
               maxWidth: 1060,
               margin: "0 auto",
               border: "1px solid rgba(15,23,42,0.10)",
               borderRadius: 18,
-              background: "rgba(255,255,255,0.95)",
+              background: "rgba(255,255,255,0.96)",
               backdropFilter: "blur(10px)",
               boxShadow: "0 18px 50px rgba(15,23,42,0.12)",
               padding: 10,
@@ -667,8 +709,12 @@ export default function MissionsExplorePage() {
           >
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search missions…" style={input} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <button onClick={() => openAll(true)} style={btn}>Expand</button>
-              <button onClick={() => openAll(false)} style={btn}>Collapse</button>
+              <button onClick={() => openAll(true)} style={btn}>
+                Expand
+              </button>
+              <button onClick={() => openAll(false)} style={btn}>
+                Collapse
+              </button>
             </div>
 
             {locked && (

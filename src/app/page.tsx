@@ -132,6 +132,8 @@ function chipStyle(active: boolean): React.CSSProperties {
     fontWeight: 950,
     cursor: "pointer",
     letterSpacing: 0.2,
+    whiteSpace: "nowrap",
+    flexShrink: 0,
   };
 }
 
@@ -143,7 +145,10 @@ type Tab = "OVERVIEW" | "ACTIVITY";
 
 export default function HomePage() {
   const { publicKey, connected } = useWallet();
+
+  // ✅ mobile 真实状态：publicKey 才可信
   const wallet = useMemo(() => (publicKey ? publicKey.toBase58() : ""), [publicKey]);
+  const walletReady = !!publicKey;
 
   const [tab, setTab] = useState<Tab>("OVERVIEW");
 
@@ -388,11 +393,20 @@ export default function HomePage() {
     chainStatus.mode === "ONCHAIN" ? "On-chain · Live" : chainStatus.mode === "PREPARING" ? "On-chain · Preparing" : "MVP · Off-chain";
 
   return (
-    <main style={{ padding: "clamp(16px, 4vw, 28px)", paddingBottom: "clamp(56px, 10vw, 80px)", maxWidth: 1160, margin: "0 auto" }}>
+    <main
+      className="om-main"
+      style={{
+        padding: "clamp(16px, 4vw, 28px)",
+        paddingBottom: "clamp(56px, 10vw, 80px)",
+        maxWidth: 1160,
+        margin: "0 auto",
+      }}
+    >
       {/* Hero */}
       <section style={{ marginTop: 6 }}>
         <div style={heroWrap}>
           <div
+            className="om-hero-row"
             style={{
               display: "flex",
               justifyContent: "space-between",
@@ -401,8 +415,8 @@ export default function HomePage() {
               alignItems: "flex-start",
             }}
           >
-            <div style={{ minWidth: 280, flex: "1 1 620px" }}>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <div className="om-hero-left" style={{ minWidth: 280, flex: "1 1 620px" }}>
+              <div className="om-hero-meta" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                 <span style={pillStyle(true)}>{phaseLabel}</span>
 
                 <span style={{ fontSize: 12, opacity: 0.78 }}>
@@ -415,35 +429,41 @@ export default function HomePage() {
               </div>
 
               <h1
-  style={{
-    marginTop: 12,
-    fontSize: "clamp(28px, 5vw, 44px)",
-    fontWeight: 950,
-    lineHeight: 1.05,
-  }}
->
-  One Mission
-  <br />
-  <span style={{ fontWeight: 900 }}>
-    Human Contribution → Identity → On-chain Record
-  </span>
-</h1>
-<p
-  style={{
-    marginTop: 12,
-    maxWidth: 720,
-    fontSize: 15,
-    lineHeight: 1.6,
-    opacity: 0.85,
-  }}
->
-  A system where contribution defines who you are —
-  <br />
-  and the chain remembers it.
-</p>
+                style={{
+                  marginTop: 12,
+                  fontSize: "clamp(28px, 5vw, 44px)",
+                  fontWeight: 950,
+                  lineHeight: 1.05,
+                }}
+              >
+                One Mission
+                <br />
+                <span style={{ fontWeight: 900 }}>Human Contribution → Identity → On-chain Record</span>
+              </h1>
 
+              <p
+                style={{
+                  marginTop: 12,
+                  maxWidth: 720,
+                  fontSize: 15,
+                  lineHeight: 1.6,
+                  opacity: 0.85,
+                }}
+              >
+                A system where contribution defines who you are —
+                <br />
+                and the chain remembers it.
+              </p>
 
-              <p style={{ marginTop: 12, fontSize: "clamp(14px, 2.2vw, 16px)", opacity: 0.86, maxWidth: 880, lineHeight: 1.65 }}>
+              <p
+                style={{
+                  marginTop: 12,
+                  fontSize: "clamp(14px, 2.2vw, 16px)",
+                  opacity: 0.86,
+                  maxWidth: 880,
+                  lineHeight: 1.65,
+                }}
+              >
                 A universal Proof-of-Contribution console for projects and users. Review remains human; the chain is the permanent record.
               </p>
 
@@ -464,20 +484,20 @@ export default function HomePage() {
               </div>
 
               {/* ✅ Hero shortcuts */}
-              <div style={{ marginTop: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <a href="/projects" style={btnPrimary}>
+              <div className="om-hero-actions" style={{ marginTop: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <a className="om-btn" href="/projects" style={btnPrimary}>
                   Create / Manage Projects
                 </a>
-                <a href="/missions" style={btnGhost}>
+                <a className="om-btn" href="/missions" style={btnGhost}>
                   Explore Missions
                 </a>
-                <a href="/ai" style={btnGhost}>
+                <a className="om-btn" href="/ai" style={btnGhost}>
                   Open One AI
                 </a>
-                <a href="/profile" style={btnGhost}>
+                <a className="om-btn" href="/profile" style={btnGhost}>
                   Open Profile
                 </a>
-                <button onClick={loadAll} style={btnGhostButton}>
+                <button className="om-btn" onClick={loadAll} style={btnGhostButton}>
                   {loading ? "Refreshing…" : "Refresh"}
                 </button>
               </div>
@@ -485,7 +505,7 @@ export default function HomePage() {
               {err && <div style={{ marginTop: 12, color: "#b91c1c", fontWeight: 950 }}>{err}</div>}
 
               {/* Tabs */}
-              <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div className="om-tabs" style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button onClick={() => setTab("OVERVIEW")} style={chipStyle(tab === "OVERVIEW")}>
                   Overview
                 </button>
@@ -494,14 +514,14 @@ export default function HomePage() {
                 </button>
               </div>
 
-              {/* ✅ 填补你截图里左侧“空档”：放一个轻量示意图/品牌位（不改任何数据/结构，只加展示块） */}
+              {/* ✅ 填补左侧空档：展示块 */}
               <div style={{ marginTop: 12 }}>
                 <HeroVisual />
               </div>
             </div>
 
             {/* Right column */}
-            <div style={{ flex: "1 1 380px", minWidth: 280, maxWidth: 520 }}>
+            <div className="om-hero-right" style={{ flex: "1 1 380px", minWidth: 280, maxWidth: 520 }}>
               <div style={card}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
                   <div style={{ fontSize: 14, fontWeight: 950 }}>System Status</div>
@@ -570,7 +590,7 @@ export default function HomePage() {
                 </div>
               </div>
 
-              {/* ✅ Rights Binding（Universal）— 对外最值钱的表达：资产 live，但授予 policy 控制 */}
+              {/* ✅ Rights Binding（Universal） */}
               <div style={{ marginTop: 12, ...card }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
                   <div style={{ fontSize: 14, fontWeight: 950 }}>Rights Binding (Universal)</div>
@@ -620,9 +640,7 @@ export default function HomePage() {
           <section style={{ marginTop: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
               <div style={{ fontSize: 16, fontWeight: 950 }}>System map</div>
-              <div style={{ fontSize: 13, opacity: 0.75 }}>
-                Operational console · Proof is the source of truth, on-chain is the receipt
-              </div>
+              <div style={{ fontSize: 13, opacity: 0.75 }}>Operational console · Proof is the source of truth, on-chain is the receipt</div>
             </div>
 
             <div style={{ marginTop: 10 }}>
@@ -638,6 +656,7 @@ export default function HomePage() {
             </div>
 
             <div
+              className="om-grid"
               style={{
                 marginTop: 10,
                 display: "grid",
@@ -685,7 +704,7 @@ export default function HomePage() {
             </div>
 
             <div style={{ marginTop: 10, display: "grid", gap: 12 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12 }}>
+              <div className="om-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12 }}>
                 <Panel title="Projects" subtitle="Latest (3)" rightLink={{ text: "View all →", href: "/projects" }}>
                   {recentProjects.length === 0 ? (
                     <Empty text="No projects yet. Create your first project." href="/projects" />
@@ -728,7 +747,6 @@ export default function HomePage() {
                       const pn = maps.projName.get(p.projectId) || p.projectId;
                       const mt = maps.missionTitle.get(p.missionId) || p.missionId;
 
-                      // ✅ 最小改动：不给后端添负担，只用 currentStatus 推断对外展示的 rights 状态
                       const rights =
                         p.currentStatus === "APPROVED"
                           ? { text: "Rights: Eligible (policy)", tone: "green" as const }
@@ -737,7 +755,7 @@ export default function HomePage() {
                           : { text: "Rights: Pending", tone: "amber" as const };
 
                       return (
-                        <div key={p.id} style={proofRow}>
+                        <div key={p.id} className="om-proof-row" style={proofRow}>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontWeight: 950, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                               <span style={{ fontFamily: "monospace" }}>{fmtShortAddress(p.wallet, 6)}</span>
@@ -758,7 +776,7 @@ export default function HomePage() {
                             </div>
                           </div>
 
-                          <div style={{ fontSize: 12, opacity: 0.76, textAlign: "right", flexShrink: 0 }}>
+                          <div className="om-proof-side" style={{ fontSize: 12, opacity: 0.76, textAlign: "right", flexShrink: 0 }}>
                             {fmtTime(p.createdAt)}
                             <div style={{ marginTop: 8 }}>
                               <span style={pillStyle(true)}>{p.chainStatus ? "ON-CHAIN" : "VERIFIED"}</span>
@@ -782,9 +800,7 @@ export default function HomePage() {
             Console home · Fixed length · APIs: /api/projects · /api/missions · /api/proofs · /api/profile/proofs · (optional) /api/chain/status
           </footer>
 
-          <div style={copyright}>
-            © {new Date().getFullYear()} WAOC · We Are One Connection · weareoneconnection.org
-          </div>
+          <div style={copyright}>© {new Date().getFullYear()} WAOC · We Are One Connection · weareoneconnection.org</div>
         </>
       ) : (
         <>
@@ -795,7 +811,7 @@ export default function HomePage() {
               <div style={{ fontSize: 13, opacity: 0.75 }}>Latest proofs (max 20) · Searchable</div>
             </div>
 
-            <div style={{ marginTop: 12, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <div className="om-activity-controls" style={{ marginTop: 12, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
               <input
                 value={activityQuery}
                 onChange={(e) => setActivityQuery(e.target.value)}
@@ -803,7 +819,7 @@ export default function HomePage() {
                 style={searchInput}
               />
               <div style={{ fontSize: 12, opacity: 0.75 }}>
-                {connected && wallet ? (
+                {walletReady && wallet ? (
                   <>
                     Wallet: <code style={codePill}>{fmtShortAddress(wallet, 6)}</code>
                   </>
@@ -830,7 +846,7 @@ export default function HomePage() {
                         : { text: "Rights: Pending", tone: "amber" as const };
 
                     return (
-                      <div key={p.id} style={proofRow}>
+                      <div key={p.id} className="om-proof-row" style={proofRow}>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontWeight: 950, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                             <span style={{ fontFamily: "monospace" }}>{fmtShortAddress(p.wallet, 6)}</span>
@@ -854,7 +870,7 @@ export default function HomePage() {
                           </div>
                         </div>
 
-                        <div style={{ fontSize: 12, opacity: 0.76, textAlign: "right", flexShrink: 0 }}>
+                        <div className="om-proof-side" style={{ fontSize: 12, opacity: 0.76, textAlign: "right", flexShrink: 0 }}>
                           {fmtTime(p.createdAt)}
                           <div style={{ marginTop: 8 }}>
                             <a href="/profile" style={{ ...miniLink, marginRight: 10 }}>
@@ -878,12 +894,88 @@ export default function HomePage() {
 
             <footer style={footer}>Activity is capped at 20 for speed.</footer>
 
-            <div style={copyright}>
-              © {new Date().getFullYear()} WAOC · We Are One Connection · weareoneconnection.org
-            </div>
+            <div style={copyright}>© {new Date().getFullYear()} WAOC · We Are One Connection · weareoneconnection.org</div>
           </section>
         </>
       )}
+
+      {/* ✅ Mobile fixes: 不改结构，只做断点布局（手机不挤压/不重叠/按钮全宽/Proof 行上下排） */}
+      <style jsx>{`
+        /* 通用：避免 flex 子项被长文本撑爆 */
+        :global(.om-main *) {
+          box-sizing: border-box;
+        }
+
+        /* Tabs 在小屏时允许横向滚动（避免挤压） */
+        :global(.om-tabs) {
+          overflow-x: auto;
+          padding-bottom: 6px;
+          -webkit-overflow-scrolling: touch;
+        }
+        :global(.om-tabs::-webkit-scrollbar) {
+          height: 6px;
+        }
+
+        /* 断点：手机 */
+        @media (max-width: 640px) {
+          /* Hero 左右列强制上下堆叠，避免“右侧卡挤到左侧” */
+          :global(.om-hero-row) {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+          :global(.om-hero-left),
+          :global(.om-hero-right) {
+            min-width: 0 !important;
+            max-width: 100% !important;
+          }
+
+          /* 顶部 meta 行更紧凑 */
+          :global(.om-hero-meta) {
+            gap: 8px !important;
+          }
+
+          /* Hero buttons：手机全宽一列 */
+          :global(.om-hero-actions) {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+          :global(.om-hero-actions .om-btn) {
+            width: 100% !important;
+            text-align: center !important;
+          }
+
+          /* Grid 统一：手机单列，避免 auto-fit 在窄屏出现两列挤压 */
+          :global(.om-grid) {
+            grid-template-columns: 1fr !important;
+          }
+
+          /* Activity 控制区：输入框全宽 */
+          :global(.om-activity-controls) {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+          :global(.om-activity-controls input) {
+            width: 100% !important;
+          }
+
+          /* Proof 行：左右变上下，右侧信息靠左，避免挤压 */
+          :global(.om-proof-row) {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+          :global(.om-proof-side) {
+            text-align: left !important;
+          }
+        }
+
+        /* 平板：允许更松弛的排版（可选加强） */
+        @media (min-width: 641px) and (max-width: 1024px) {
+          :global(.om-hero-right) {
+            max-width: 520px !important;
+          }
+        }
+      `}</style>
     </main>
   );
 }
@@ -1051,9 +1143,7 @@ function HeroVisual() {
             <span style={miniPill}>Receipt</span>
           </div>
 
-          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.76, lineHeight: 1.55 }}>
-            Receipt is immutable; it’s not auto-distribution.
-          </div>
+          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.76, lineHeight: 1.55 }}>Receipt is immutable; it’s not auto-distribution.</div>
         </div>
 
         {/* Rights mapping */}
@@ -1076,7 +1166,7 @@ function HeroVisual() {
           </div>
         </div>
 
-        {/* ✅ Brand slot（结构不变：还是 heroVisualBox + 内部 flex） */}
+        {/* Brand slot */}
         <div style={heroVisualBox}>
           <div style={{ fontSize: 12, fontWeight: 950, opacity: 0.78 }}>Brand slot</div>
 
@@ -1091,17 +1181,15 @@ function HeroVisual() {
                     height: "100%",
                     objectFit: "contain",
                     display: "block",
-                    padding: 6, // 关键：让透明边距更不影响观感
+                    padding: 6,
                   }}
                   onError={(e) => {
                     const img = e.currentTarget as HTMLImageElement;
-                    // SVG 失败 → 尝试 PNG
                     if (!img.dataset.fallback) {
                       img.dataset.fallback = "1";
                       img.src = "/brand/waoc-logo.png";
                       return;
                     }
-                    // PNG 也失败 → 用内置 mark
                     setLogoOk(false);
                   }}
                 />
@@ -1119,24 +1207,13 @@ function HeroVisual() {
               <div style={{ fontWeight: 950, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 WAOC · One Mission
               </div>
-
-              {/* ✅ 对外文案（替换开发提示） */}
               <div style={{ marginTop: 4, fontSize: 12, opacity: 0.78, lineHeight: 1.5 }}>
                 Official identity mark · Proofs become receipts · Rights are policy-driven.
               </div>
             </div>
           </div>
 
-          <div
-            style={{
-              marginTop: 10,
-              paddingTop: 10,
-              borderTop: "1px solid #f3f4f6",
-              fontSize: 12,
-              opacity: 0.76,
-              lineHeight: 1.55,
-            }}
-          >
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #f3f4f6", fontSize: 12, opacity: 0.76, lineHeight: 1.55 }}>
             This identity applies across all missions and proofs under the Universal system.
           </div>
         </div>
@@ -1370,7 +1447,6 @@ const logoMark: React.CSSProperties = {
   overflow: "hidden",
   boxShadow: "0 1px 0 rgba(17,24,39,0.04)",
 };
-
 
 const miniPill: React.CSSProperties = {
   padding: "6px 10px",
@@ -1606,7 +1682,7 @@ const sysPipe: React.CSSProperties = {
   gap: 10,
   flexWrap: "wrap",
   alignItems: "center",
-  overflowX: "auto", // ✅ 小屏更友好（不改结构）
+  overflowX: "auto",
 };
 
 const pipePill: React.CSSProperties = {
@@ -1663,6 +1739,7 @@ const ctaGhost: React.CSSProperties = {
   fontWeight: 950,
   textDecoration: "none",
 };
+
 const brandSlot: React.CSSProperties = {
   display: "flex",
   gap: 14,
@@ -1684,6 +1761,6 @@ const brandLogo: React.CSSProperties = {
   width: "100%",
   height: "100%",
   objectFit: "contain",
-  padding: 6,          // ⭐ 非常重要：吃掉 SVG 透明边
+  padding: 6,
   display: "block",
 };
