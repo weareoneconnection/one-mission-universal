@@ -9,20 +9,22 @@ export default function AiPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 flex-1">
               {/* top pills */}
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  One AI
+              <div className="-mx-4 sm:mx-0">
+                <div className="flex flex-nowrap gap-2 overflow-x-auto px-4 sm:px-0 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <div className="shrink-0 inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    One AI
+                  </div>
+                  <span className="shrink-0 rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
+                    Draft-first
+                  </span>
+                  <span className="shrink-0 rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
+                    JSON-safe
+                  </span>
+                  <span className="shrink-0 rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
+                    Calm mode
+                  </span>
                 </div>
-                <span className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-                  Draft-first
-                </span>
-                <span className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-                  JSON-safe
-                </span>
-                <span className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-                  Calm mode
-                </span>
               </div>
 
               <div className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
@@ -92,7 +94,6 @@ export default function AiPage() {
             </div>
 
             {/* Quick examples */}
-            {/* ✅ Mobile: allow horizontal scroll instead of wrapping into ugly multi-lines */}
             <div className="-mx-4 sm:mx-0">
               <div className="flex gap-2 overflow-x-auto px-4 sm:px-0 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <span className="shrink-0 rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
@@ -114,7 +115,10 @@ export default function AiPage() {
           <div className="p-3 sm:p-4">
             {/* Subtle inner frame for better focus */}
             <div className="rounded-2xl border bg-gradient-to-b from-white to-slate-50 p-3 sm:p-4">
-              <AiChat />
+              {/* ✅ 关键：给 AiChat 一个最小高度，让页面不抖，移动端更像“工作区” */}
+              <div className="min-h-[420px] sm:min-h-[520px]">
+                <AiChat />
+              </div>
             </div>
           </div>
         </div>
@@ -123,7 +127,7 @@ export default function AiPage() {
         <div className="mt-5 rounded-2xl border bg-white p-4 shadow-sm sm:mt-7">
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm font-semibold text-slate-900">Notes</div>
-            <span className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+            <span className="shrink-0 rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-700">
               Debug-friendly
             </span>
           </div>

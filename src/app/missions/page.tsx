@@ -43,14 +43,17 @@ function short(s: string, n = 8) {
 export default function MissionsExplorePage() {
   const router = useRouter();
   const { publicKey, connected } = useWallet();
+
+  // ✅ mobile & iOS: connected 可能为 true 但 publicKey 仍为空
   const wallet = useMemo(() => (publicKey ? publicKey.toBase58() : ""), [publicKey]);
+  const walletReady = !!publicKey;
 
   // ✅ role state
   const [roleLoading, setRoleLoading] = useState(false);
   const [role, setRole] = useState<"OWNER" | "USER">("USER");
 
-  // ✅ lock condition（你原本逻辑不变）
-  const locked = !connected || !wallet;
+  // ✅ lock condition（逻辑不变：没钱包就锁，但判断更可靠）
+  const locked = !walletReady || !wallet;
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -75,13 +78,14 @@ export default function MissionsExplorePage() {
   const [openProjects, setOpenProjects] = useState<Record<string, boolean>>({});
 
   // =========================
-  // ✅ Role resolve (ONLY when wallet connected)
+  // ✅ Role resolve (ONLY when wallet ready)
   // =========================
   useEffect(() => {
     let cancelled = false;
 
     async function loadRole() {
-      if (!connected || !wallet) {
+      // ✅ 没有 walletReady 就别查 role（避免闪屏 & iOS 误判）
+      if (!walletReady || !wallet) {
         setRole("USER");
         return;
       }
@@ -94,10 +98,8 @@ export default function MissionsExplorePage() {
         const r = j?.role === "OWNER" ? "OWNER" : "USER";
         setRole(r);
 
-        // ✅ 如果是项目钱包，禁止停留在 missions
-        if (r === "OWNER") {
-          router.replace("/projects");
-        }
+        // ✅ OWNER 不应停留 missions：引导到 /projects
+        if (r === "OWNER") router.replace("/projects");
       } catch {
         if (!cancelled) setRole("USER");
       } finally {
@@ -109,10 +111,10 @@ export default function MissionsExplorePage() {
     return () => {
       cancelled = true;
     };
-  }, [connected, wallet, router]);
+  }, [walletReady, wallet, router]);
 
-  // ✅ OWNER 访问 missions：直接返回一个轻提示（避免闪屏看到内容）
-  const roleBlocked = connected && wallet && role === "OWNER";
+  // ✅ OWNER 访问 missions：直接提示（避免看到列表闪一下）
+  const roleBlocked = walletReady && wallet && role === "OWNER";
 
   async function loadMissions() {
     setLoading(true);
@@ -132,7 +134,7 @@ export default function MissionsExplorePage() {
 
   async function loadProofs() {
     // ✅ locked: do not try proofs
-    if (!wallet) {
+    if (!walletReady || !wallet) {
       setProofs([]);
       return;
     }
@@ -153,11 +155,13 @@ export default function MissionsExplorePage() {
 
   useEffect(() => {
     loadMissions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOnly]);
 
   useEffect(() => {
     loadProofs();
-  }, [wallet]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletReady, wallet]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -237,8 +241,9 @@ export default function MissionsExplorePage() {
     maxWidth: 1060,
     margin: "0 auto",
     boxSizing: "border-box",
-    // ✅ 手机底部留更多空间给 sticky bar（含 safe-area）
     paddingBottom: isMobile ? "calc(132px + env(safe-area-inset-bottom, 0px))" : 32,
+    background: "#fff",
+    minHeight: "calc(100vh - 64px)",
   };
 
   const hero: React.CSSProperties = {
@@ -281,7 +286,6 @@ export default function MissionsExplorePage() {
     justifyContent: "center",
     gap: 8,
     WebkitTapHighlightColor: "transparent",
-    // ✅ 小屏避免按钮挤压导致文字换行怪异
     whiteSpace: "nowrap",
   };
 
@@ -324,7 +328,6 @@ export default function MissionsExplorePage() {
     userSelect: "none",
     background:
       "radial-gradient(900px 220px at 20% 0%, rgba(15,23,42,0.05), transparent), linear-gradient(180deg, #fff, #fbfbfb)",
-    // ✅ iOS 点击更稳
     WebkitTapHighlightColor: "transparent",
   };
 
@@ -336,7 +339,6 @@ export default function MissionsExplorePage() {
     boxShadow: "0 8px 22px rgba(15,23,42,0.05)",
     display: "grid",
     gap: 10,
-    // ✅ 防止长文本撑爆
     minWidth: 0,
   };
 
@@ -413,7 +415,7 @@ export default function MissionsExplorePage() {
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               <span style={pill}>Mission Library</span>
 
-              {connected && wallet ? (
+              {walletReady && wallet ? (
                 <span style={pill}>
                   wallet: <span style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>{short(wallet, 10)}</span>
                   {proofsLoading && <span style={{ opacity: 0.7 }}>checking…</span>}
@@ -424,9 +426,8 @@ export default function MissionsExplorePage() {
                 </span>
               )}
 
-              {/* ✅ role pill（不改结构，增加一颗） */}
               <span style={pill}>
-                role: <b>{connected && wallet ? (roleLoading ? "…" : role) : "USER"}</b>
+                role: <b>{walletReady && wallet ? (roleLoading ? "…" : role) : "USER"}</b>
               </span>
 
               <span style={pill}>{loading ? "Loading…" : `${filtered.length} mission(s)`}</span>
@@ -455,7 +456,6 @@ export default function MissionsExplorePage() {
                 marginTop: 12,
                 display: "grid",
                 gap: 10,
-                // ✅ 手机下更稳定：第一行两列按钮，搜索独占一行（结构不变，只是布局更“稳”）
                 gridTemplateColumns: isMobile ? "1fr 1fr" : "auto auto auto auto auto 1fr",
                 alignItems: "stretch",
               }}
@@ -469,12 +469,7 @@ export default function MissionsExplorePage() {
                   gridColumn: isMobile ? "1 / -1" : undefined,
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={activeOnly}
-                  onChange={(e) => setActiveOnly(e.target.checked)}
-                  style={{ width: 18, height: 18 }}
-                />
+                <input type="checkbox" checked={activeOnly} onChange={(e) => setActiveOnly(e.target.checked)} style={{ width: 18, height: 18 }} />
                 <span style={{ fontWeight: 950, fontSize: 13 }}>Active only</span>
               </label>
 
@@ -485,7 +480,6 @@ export default function MissionsExplorePage() {
                 Collapse
               </button>
 
-              {/* ✅ USER 区不应该给 Projects/Dashboard（不乱结构：保留按钮位，但改成 Gate / Profile 更合理） */}
               <a href="/profile" style={{ ...btn, width: "100%" }}>
                 Profile
               </a>
@@ -493,7 +487,6 @@ export default function MissionsExplorePage() {
                 Switch
               </a>
 
-              {/* ✅ 顶部搜索：手机下保留但弱化（主要用底部 sticky 搜索更顺） */}
               <div style={{ gridColumn: isMobile ? "1 / -1" : "auto", width: "100%", opacity: isMobile ? 0.88 : 1 }}>
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title / description / project / id…" style={input} />
               </div>
@@ -615,7 +608,6 @@ export default function MissionsExplorePage() {
                           text = "Start";
                         }
                       } else {
-                        // ✅ hard lock: always show connect
                         kind = "DISABLED";
                         text = "Connect wallet";
                       }
@@ -624,18 +616,9 @@ export default function MissionsExplorePage() {
 
                       return (
                         <div key={m.id} style={missionCard}>
-                          {/* Title + status */}
                           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
                             <div style={{ minWidth: 0 }}>
-                              <div
-                                style={{
-                                  fontSize: 15,
-                                  fontWeight: 950,
-                                  lineHeight: 1.25,
-                                  color: "#0f172a",
-                                  wordBreak: "break-word",
-                                }}
-                              >
+                              <div style={{ fontSize: 15, fontWeight: 950, lineHeight: 1.25, color: "#0f172a", wordBreak: "break-word" }}>
                                 {m.title}
                               </div>
                               <div style={{ marginTop: 6, ...metaRow }}>
@@ -651,21 +634,17 @@ export default function MissionsExplorePage() {
                             <span style={m.active ? statusPill("ACTIVE") : statusPill("INACTIVE")}>{m.active ? "ACTIVE" : "INACTIVE"}</span>
                           </div>
 
-                          {/* Description */}
                           {m.description && (
                             <div style={{ fontSize: 13, lineHeight: 1.65, color: "#0f172a", opacity: 0.9, wordBreak: "break-word" }}>
                               {m.description}
                             </div>
                           )}
 
-                          {/* Small meta */}
                           <div style={{ fontSize: 12, color: "#475569", opacity: 0.9 }}>
-                            project:{" "}
-                            <span style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>{short(m.projectId, 10)}</span> · id:{" "}
+                            project: <span style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>{short(m.projectId, 10)}</span> · id:{" "}
                             <span style={{ fontFamily: "ui-monospace, Menlo, monospace" }}>{short(m.id, 10)}</span>
                           </div>
 
-                          {/* CTA area (locked = no href) */}
                           <div style={{ display: "grid", gap: 10 }}>
                             {locked ? (
                               <a href="/dashboard" style={{ textDecoration: "none" }}>
@@ -701,6 +680,7 @@ export default function MissionsExplorePage() {
               borderRadius: 18,
               background: "rgba(255,255,255,0.96)",
               backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
               boxShadow: "0 18px 50px rgba(15,23,42,0.12)",
               padding: 10,
               display: "grid",
@@ -725,6 +705,13 @@ export default function MissionsExplorePage() {
           </div>
         </div>
       )}
+
+      {/* ✅ iOS 背景透黑兜底 */}
+      <style jsx>{`
+        :global(html, body) {
+          background: #ffffff !important;
+        }
+      `}</style>
     </main>
   );
 }

@@ -34,11 +34,9 @@ type Proof = {
   currentStatus: "PENDING" | "APPROVED" | "REJECTED" | "REVOKED";
   events: ProofEvent[];
 
-  // 积分/贡献（后端存在，前端展示）
   points?: number;
   reputationDelta?: number;
 
-  // 提交 proof 时带的额外信息（你的后端现在在 root 上）
   payload?: {
     links?: string[];
     note?: string;
@@ -79,19 +77,16 @@ type OnchainProfile = {
   cluster: "mainnet-beta" | "devnet" | "testnet" | "custom";
   rpc?: string;
 
-  // Program(s)
   programs?: {
     identity?: string;
     points?: string;
     mission?: string;
   };
 
-  // Identity core
   identity?: {
     initialized: boolean;
     identityPda?: string;
 
-    // optional identity fields
     createdAt?: number;
     lastUpdatedAt?: number;
     lastUpdatedSlot?: number;
@@ -100,17 +95,14 @@ type OnchainProfile = {
     badges?: string[];
   };
 
-  // Aggregates
   totals?: {
     points?: number;
     reputation?: number;
   };
 
-  // Accounts & recent activity
   accounts?: OnchainAccountRef[];
   recentTx?: OnchainTx[];
 
-  // Sync hints
   sync?: {
     status?: "SYNCED" | "SYNCING" | "OUT_OF_SYNC" | "UNKNOWN";
     chainPoints?: number;
@@ -269,7 +261,7 @@ function StatCard(props: {
         borderRadius: 18,
         padding: 14,
         boxShadow: "0 1px 0 rgba(0,0,0,0.03)",
-        minWidth: 0, // ✅ 关键：避免 grid/flex 下长文本撑爆导致重叠
+        minWidth: 0,
       }}
     >
       <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 900 }}>{props.label}</div>
@@ -315,7 +307,7 @@ function Chip(props: { active?: boolean; onClick?: () => void; children: React.R
         cursor: "pointer",
         letterSpacing: 0.2,
         whiteSpace: "nowrap",
-        flexShrink: 0, // ✅ 横向滚动时不被压扁
+        flexShrink: 0,
       }}
     >
       {props.children}
@@ -329,45 +321,73 @@ function Divider() {
 
 function emptyBox(title: string, desc?: string) {
   return (
-    <div style={{ border: "1px solid #e5e7eb", borderRadius: 18, padding: 18, background: "white" }}>
+    <div style={{ border: "1px solid #e5e7eb", borderRadius: 18, padding: 18, background: "white", boxShadow: softShadow }}>
       <div style={{ fontWeight: 950, fontSize: 18 }}>{title}</div>
       {desc && <div style={{ marginTop: 8, opacity: 0.75 }}>{desc}</div>}
     </div>
   );
 }
 
-/* --- Explorer URL helper (长期可验证基础设施) --- */
+/* --- Explorer URL helper --- */
 function explorerBase(cluster: string) {
-  if (cluster === "devnet") return "https://explorer.solana.com";
-  if (cluster === "testnet") return "https://explorer.solana.com";
-  if (cluster === "mainnet-beta") return "https://explorer.solana.com";
   return "https://explorer.solana.com";
 }
-
 function explorerQuery(cluster: string) {
   if (cluster === "devnet") return "?cluster=devnet";
   if (cluster === "testnet") return "?cluster=testnet";
   return "";
 }
-
 function explorerAccountUrl(cluster: string, address: string) {
   return `${explorerBase(cluster)}/address/${address}${explorerQuery(cluster)}`;
 }
-
 function explorerTxUrl(cluster: string, sig: string) {
   return `${explorerBase(cluster)}/tx/${sig}${explorerQuery(cluster)}`;
 }
+
+/* =========================
+   Styles (统一风格、兜底)
+========================= */
+
+const softShadow = "0 10px 30px rgba(15,23,42,0.06)";
+
+const sectionCard: React.CSSProperties = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 18,
+  background: "#ffffff",
+  boxShadow: softShadow,
+};
+
+const btnGhost: React.CSSProperties = {
+  padding: "10px 14px",
+  borderRadius: 14,
+  border: "1px solid #e5e7eb",
+  background: "white",
+  fontWeight: 950,
+  cursor: "pointer",
+  boxShadow: "0 1px 0 rgba(0,0,0,0.03)",
+  textAlign: "center",
+};
+
+const btnPrimaryLink: React.CSSProperties = {
+  padding: "10px 14px",
+  borderRadius: 14,
+  border: "1px solid #111827",
+  background: "#111827",
+  color: "white",
+  textDecoration: "none",
+  fontWeight: 950,
+  textAlign: "center",
+};
 
 /* =========================
    Page (长期最终版)
 ========================= */
 
 export default function ProfilePage() {
-  const { publicKey, connected } = useWallet();
+  const { publicKey } = useWallet();
 
-  // ✅ 修复 mobile 钱包状态：connected 在 iOS/内置浏览器可能为 true 但 publicKey 仍为空
   const wallet = useMemo(() => (publicKey ? publicKey.toBase58() : ""), [publicKey]);
-  const walletReady = !!publicKey; // ✅ 以 publicKey 作为唯一可信 ready 信号
+  const walletReady = !!publicKey;
 
   const [loading, setLoading] = useState(false);
   const [proofs, setProofs] = useState<Proof[]>([]);
@@ -467,7 +487,6 @@ export default function ProfilePage() {
     }
   }
 
-  // ✅ 修复：chainStatus 之前未加载，Chain Receipts 永远 0
   async function loadChainStatus() {
     try {
       const j = await fetch("/api/chain/status", { cache: "no-store" }).then((r) => r.json());
@@ -475,7 +494,6 @@ export default function ProfilePage() {
     } catch {}
   }
 
-  // ✅ 修复 mobile race：publicKey 变更会有短暂 null → value，延迟 250ms 避免 UI 抖动/误判
   useEffect(() => {
     if (!walletReady || !wallet) {
       setProofs([]);
@@ -495,7 +513,6 @@ export default function ProfilePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletReady, wallet]);
 
-  // ✅ iOS Safari/内置浏览器返回页面有缓存：pageshow 时补刷一次
   useEffect(() => {
     const onShow = () => {
       if (walletReady && wallet) {
@@ -537,10 +554,7 @@ export default function ProfilePage() {
     const summaryPoints = Number(s?.totalPoints);
     const summaryPointsOk =
       Number.isFinite(summaryPoints) &&
-      !(
-        (approved > 0 && summaryPoints === 0 && fallbackTotalPoints > 0) ||
-        summaryPoints < fallbackTotalPoints
-      );
+      !((approved > 0 && summaryPoints === 0 && fallbackTotalPoints > 0) || summaryPoints < fallbackTotalPoints);
 
     const summaryRep = Number(s?.totalReputation);
     const summaryRepOk = Number.isFinite(summaryRep);
@@ -590,7 +604,7 @@ export default function ProfilePage() {
   }, [filtered]);
 
   /* =========================
-     On-chain derived (长期展示)
+     On-chain derived
   ========================= */
 
   const chainCluster = onchain?.cluster || "mainnet-beta";
@@ -614,17 +628,10 @@ export default function ProfilePage() {
     else if (pointsOk && repOk) status = "SYNCED";
     else status = "OUT_OF_SYNC";
 
-    return {
-      offPoints,
-      offRep,
-      diffPoints,
-      diffRep,
-      status,
-    };
+    return { offPoints, offRep, diffPoints, diffRep, status };
   }, [walletReady, wallet, onchain, chainPoints, chainRep, stats.offchainApprovedPoints, stats.offchainReputation]);
 
   const identityPill = useMemo(() => {
-    // ✅ 修复：不用 connected，改用 walletReady
     if (!walletReady || !wallet) return onchainPill("NEUTRAL", "WALLET DISCONNECTED");
     if (onchainLoading) return onchainPill("NEUTRAL", "LOADING");
     if (onchainErr) return onchainPill("BAD", "ON-CHAIN ERROR");
@@ -634,7 +641,6 @@ export default function ProfilePage() {
   }, [walletReady, wallet, onchainLoading, onchainErr, onchain, identity?.initialized]);
 
   const syncPill = useMemo(() => {
-    // ✅ 修复：不用 connected，改用 walletReady
     if (!walletReady || !wallet) return onchainPill("NEUTRAL", "SYNC UNKNOWN");
     if (onchainLoading) return onchainPill("NEUTRAL", "SYNC CHECKING");
     if (onchainErr) return onchainPill("BAD", "SYNC ERROR");
@@ -655,15 +661,23 @@ export default function ProfilePage() {
   ========================= */
 
   return (
-    <main className="pageWrap" style={{ padding: 24, maxWidth: 1160, margin: "0 auto" }}>
+    <main
+      className="pageWrap"
+      style={{
+        padding: "clamp(16px, 4vw, 28px)",
+        maxWidth: 1160,
+        margin: "0 auto",
+        background: "#ffffff",
+        minHeight: "calc(100vh - 64px)",
+        paddingBottom: "clamp(56px, 10vw, 80px)",
+      }}
+    >
       {/* Header */}
-      <header
-        className="pageHeader"
-        style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-end" }}
-      >
+      <header className="pageHeader" style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-end" }}>
         <div style={{ minWidth: 0 }}>
-          <h1 style={{ fontSize: 36, fontWeight: 950, margin: 0, letterSpacing: -0.5 }}>My Proofs</h1>
-          <div style={{ marginTop: 10, opacity: 0.8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <h1 style={{ fontSize: "clamp(28px, 5vw, 36px)", fontWeight: 950, margin: 0, letterSpacing: -0.5 }}>My Proofs</h1>
+
+          <div style={{ marginTop: 10, opacity: 0.85, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <span style={{ fontWeight: 900, fontSize: 13 }}>Wallet</span>
             {wallet ? (
               <code
@@ -688,39 +702,17 @@ export default function ProfilePage() {
         </div>
 
         <div className="headerActions" style={{ display: "flex", gap: 10 }}>
-          <a
-            href="/missions"
-            className="actionBtn"
-            style={{
-              padding: "10px 14px",
-              borderRadius: 14,
-              border: "1px solid #e5e7eb",
-              textDecoration: "none",
-              fontWeight: 950,
-              color: "#111",
-              background: "white",
-              boxShadow: "0 1px 0 rgba(0,0,0,0.03)",
-              textAlign: "center",
-            }}
-          >
+          <a href="/missions" className="actionBtn" style={{ ...btnGhost, textDecoration: "none", color: "#111" }}>
             Browse Missions
           </a>
           <button
             onClick={() => {
               load();
               loadOnchain();
-              loadChainStatus(); // ✅ Refresh 同步刷新 chain status
+              loadChainStatus();
             }}
             className="actionBtn"
-            style={{
-              padding: "10px 14px",
-              borderRadius: 14,
-              border: "1px solid #e5e7eb",
-              background: "white",
-              fontWeight: 950,
-              cursor: "pointer",
-              boxShadow: "0 1px 0 rgba(0,0,0,0.03)",
-            }}
+            style={btnGhost}
           >
             Refresh
           </button>
@@ -738,6 +730,7 @@ export default function ProfilePage() {
             background: "#fff1f2",
             color: "#b91c1c",
             fontWeight: 900,
+            boxShadow: "0 1px 0 rgba(0,0,0,0.03)",
           }}
         >
           {err}
@@ -757,15 +750,12 @@ export default function ProfilePage() {
       </section>
 
       {/* =========================
-          On-chain Overview (长期 Identity 基础设施)
+          On-chain Overview
          ========================= */}
       <section style={{ marginTop: 14 }}>
-        <div style={{ border: "1px solid #e5e7eb", borderRadius: 18, background: "white" }}>
+        <div style={sectionCard}>
           <div style={{ padding: 14 }}>
-            <div
-              className="onchainHeader"
-              style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}
-            >
+            <div className="onchainHeader" style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 950, fontSize: 16 }}>On-chain Identity</div>
                 <div style={{ marginTop: 4, opacity: 0.7, fontSize: 13 }}>
@@ -773,33 +763,16 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div
-                className="onchainActions"
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  justifyContent: "flex-end",
-                }}
-              >
+              <div className="onchainActions" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
                 {identityPill}
                 {syncPill}
                 <button
                   onClick={() => {
                     loadOnchain();
-                    loadChainStatus(); // ✅ 这里顺便刷新
+                    loadChainStatus();
                   }}
                   className="actionBtn"
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius: 14,
-                    border: "1px solid #e5e7eb",
-                    background: "white",
-                    fontWeight: 950,
-                    cursor: "pointer",
-                    boxShadow: "0 1px 0 rgba(0,0,0,0.03)",
-                  }}
+                  style={btnGhost}
                 >
                   Refresh On-chain
                 </button>
@@ -868,7 +841,11 @@ export default function ProfilePage() {
                         ? "Out of sync"
                         : "Unknown"
                 }
-                hint={onchainLoading ? "Comparing off-chain vs chain…" : `Δ points ${derivedSync.diffPoints >= 0 ? "+" : ""}${derivedSync.diffPoints}`}
+                hint={
+                  onchainLoading
+                    ? "Comparing off-chain vs chain…"
+                    : `Δ points ${derivedSync.diffPoints >= 0 ? "+" : ""}${derivedSync.diffPoints}`
+                }
                 accent={derivedSync.status === "SYNCED" ? "green" : derivedSync.status === "OUT_OF_SYNC" ? "amber" : "neutral"}
               />
 
@@ -883,20 +860,7 @@ export default function ProfilePage() {
             {/* Identity quick links */}
             {identity?.identityPda && (
               <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                <a
-                  href={explorerAccountUrl(chainCluster, identity.identityPda)}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius: 14,
-                    border: "1px solid #111827",
-                    background: "#111827",
-                    color: "white",
-                    textDecoration: "none",
-                    fontWeight: 950,
-                  }}
-                >
+                <a href={explorerAccountUrl(chainCluster, identity.identityPda)} target="_blank" rel="noreferrer" style={btnPrimaryLink}>
                   View Identity on Explorer
                 </a>
 
@@ -905,15 +869,7 @@ export default function ProfilePage() {
                     href={explorerAccountUrl(chainCluster, onchain.programs.identity)}
                     target="_blank"
                     rel="noreferrer"
-                    style={{
-                      padding: "10px 14px",
-                      borderRadius: 14,
-                      border: "1px solid #e5e7eb",
-                      background: "white",
-                      color: "#111827",
-                      textDecoration: "none",
-                      fontWeight: 950,
-                    }}
+                    style={{ ...btnGhost, textDecoration: "none", color: "#111827" }}
                   >
                     View Program
                   </a>
@@ -1047,15 +1003,7 @@ export default function ProfilePage() {
       </section>
 
       {/* Controls */}
-      <section
-        style={{
-          marginTop: 14,
-          display: "flex",
-          gap: 12,
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
+      <section style={{ marginTop: 14, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <div className="chipRow" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {(["ALL", "PENDING", "APPROVED", "REJECTED"] as Tab[]).map((t) => (
             <Chip key={t} active={tab === t} onClick={() => setTab(t)}>
@@ -1089,38 +1037,16 @@ export default function ProfilePage() {
         ) : loading ? (
           <div style={{ fontWeight: 950, padding: 8 }}>Loading…</div>
         ) : filtered.length === 0 ? (
-          <div style={{ border: "1px solid #e5e7eb", borderRadius: 18, padding: 18, background: "white" }}>
+          <div style={{ ...sectionCard, padding: 18 }}>
             <div style={{ fontWeight: 950, fontSize: 18 }}>No proofs found</div>
             <div style={{ marginTop: 8, opacity: 0.75 }}>
               You haven’t submitted any proofs yet (or your filter/search matches nothing).
             </div>
             <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <a
-                href="/missions"
-                style={{
-                  padding: "10px 14px",
-                  borderRadius: 14,
-                  border: "1px solid #111827",
-                  background: "#111827",
-                  color: "white",
-                  textDecoration: "none",
-                  fontWeight: 950,
-                }}
-              >
+              <a href="/missions" style={btnPrimaryLink}>
                 Go to Missions
               </a>
-              <a
-                href="/projects"
-                style={{
-                  padding: "10px 14px",
-                  borderRadius: 14,
-                  border: "1px solid #e5e7eb",
-                  background: "white",
-                  color: "#111827",
-                  textDecoration: "none",
-                  fontWeight: 950,
-                }}
-              >
+              <a href="/projects" style={{ ...btnGhost, textDecoration: "none", color: "#111827" }}>
                 Explore Projects
               </a>
             </div>
@@ -1128,7 +1054,7 @@ export default function ProfilePage() {
         ) : (
           <div style={{ display: "grid", gap: 14 }}>
             {grouped.map(([proj, items]) => (
-              <div key={proj} style={{ border: "1px solid #e5e7eb", borderRadius: 18, background: "white" }}>
+              <div key={proj} style={sectionCard}>
                 <div style={{ padding: 14 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                     <div style={{ minWidth: 0 }}>
@@ -1203,26 +1129,18 @@ export default function ProfilePage() {
                                   <div style={{ fontSize: 13, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
                                     <span style={{ fontWeight: 950 }}>Links:</span>
                                     {links.slice(0, 3).map((u, i) => (
-                                      <a
-                                        key={i}
-                                        href={u}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        style={{ textDecoration: "underline", fontWeight: 900 }}
-                                      >
+                                      <a key={i} href={u} target="_blank" rel="noreferrer" style={{ textDecoration: "underline", fontWeight: 900 }}>
                                         link{i + 1}
                                       </a>
                                     ))}
-                                    {links.length > 3 && (
-                                      <span style={{ opacity: 0.7, fontWeight: 900 }}>+{links.length - 3} more</span>
-                                    )}
+                                    {links.length > 3 && <span style={{ opacity: 0.7, fontWeight: 900 }}>+{links.length - 3} more</span>}
                                   </div>
                                 )}
                               </div>
                             )}
                           </div>
 
-                          <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div className="proofRight" style={{ textAlign: "right", flexShrink: 0 }}>
                             {statusPill(p.currentStatus)}
 
                             {p.currentStatus === "APPROVED" && (
@@ -1244,11 +1162,8 @@ export default function ProfilePage() {
                           </div>
                         </div>
 
-                        {/* Timeline（结构不变，视觉升级，兼容 events 为空） */}
                         <details style={{ marginTop: 12 }}>
-                          <summary style={{ cursor: "pointer", fontWeight: 950, userSelect: "none" }}>
-                            View timeline
-                          </summary>
+                          <summary style={{ cursor: "pointer", fontWeight: 950, userSelect: "none" }}>View timeline</summary>
 
                           <div style={{ marginTop: 12 }}>
                             {!p.events || p.events.length === 0 ? (
@@ -1285,7 +1200,7 @@ export default function ProfilePage() {
         )}
       </section>
 
-      {/* ✅ 移动端响应式：不改结构，只用 CSS 做断点 */}
+      {/* ✅ CSS 兜底：背景透黑/iOS 发灰 + 小屏更顺 */}
       <style jsx>{`
         .truncateCode {
           display: inline-block;
@@ -1296,7 +1211,12 @@ export default function ProfilePage() {
           vertical-align: bottom;
         }
 
-        /* hint 两行夹断（防止 mainnet-beta / Program XXX 把卡撑爆） */
+        /* ✅ 最关键兜底：防止外层 layout 深色背景透出来（iOS Safari 很常见） */
+        :global(html, body) {
+          background: #ffffff !important;
+        }
+
+        /* hint 两行夹断（防止 Program XXX 把卡撑爆） */
         :global(.statHint) {
           display: -webkit-box;
           -webkit-line-clamp: 2;
@@ -1305,12 +1225,7 @@ export default function ProfilePage() {
           word-break: break-word;
         }
 
-        /* 手机整体 padding 更舒服 */
         @media (max-width: 640px) {
-          .pageWrap {
-            padding: 16px !important;
-          }
-
           /* Header 上下堆叠 */
           .pageHeader {
             flex-direction: column !important;
@@ -1322,6 +1237,7 @@ export default function ProfilePage() {
             width: 100%;
             display: grid !important;
             grid-template-columns: 1fr 1fr !important;
+            gap: 10px !important;
           }
 
           .actionBtn {
@@ -1333,7 +1249,7 @@ export default function ProfilePage() {
             grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
           }
 
-          /* onchain header：上下堆叠，右侧 pills/按钮换行 */
+          /* onchain header：上下堆叠 */
           .onchainHeader {
             flex-direction: column !important;
             align-items: stretch !important;
@@ -1342,53 +1258,29 @@ export default function ProfilePage() {
             justify-content: flex-start !important;
           }
 
-          /* Tabs：横向滚动不挤压 */
+          /* Tabs：横向滚动 */
           .chipRow {
             flex-wrap: nowrap !important;
             overflow-x: auto !important;
             width: 100%;
             padding-bottom: 6px;
+            -webkit-overflow-scrolling: touch;
           }
           .chipRow::-webkit-scrollbar {
             height: 6px;
           }
-        }
 
-        /* 平板：3列 */
-        @media (min-width: 641px) and (max-width: 1024px) {
-          .statsGrid {
-            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-          }
-        }
-
-        /* 桌面：6列（你原样） */
-        @media (min-width: 1025px) {
-          .statsGrid {
-            grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
-          }
-        }
-
-        /* ===== Mobile compact for Accounts / Recent activity (no structure change) ===== */
-        @media (max-width: 640px) {
-          /* details 内部卡片整体更紧凑 */
-          details > div {
-            gap: 10px !important;
+          /* proof 右侧区块在手机端更自然（不右对齐） */
+          .proofRight {
+            text-align: left !important;
           }
 
-          /* Accounts / Recent 的每行：从左右变上下 */
+          /* Accounts/Recent 行：上下排版 */
           .rowCard {
             flex-direction: column !important;
             align-items: stretch !important;
             gap: 8px !important;
-            padding: 10px 12px !important;
           }
-
-          /* 行内左侧内容确保可截断 */
-          .rowCard > div {
-            min-width: 0 !important;
-          }
-
-          /* 右侧 View 链接：手机端变按钮样式 */
           .rowCard > a {
             align-self: flex-end !important;
             text-decoration: none !important;
@@ -1399,18 +1291,17 @@ export default function ProfilePage() {
             border: 1px solid #e5e7eb !important;
             background: #ffffff !important;
           }
+        }
 
-          /* 代码块更像“标签”，并且不撑爆 */
-          .rowCard code {
-            display: inline-block !important;
-            max-width: 100% !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            white-space: nowrap !important;
-            padding: 2px 6px !important;
-            border-radius: 10px !important;
-            border: 1px solid #e5e7eb !important;
-            background: #f9fafb !important;
+        @media (min-width: 641px) and (max-width: 1024px) {
+          .statsGrid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          }
+        }
+
+        @media (min-width: 1025px) {
+          .statsGrid {
+            grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
           }
         }
       `}</style>

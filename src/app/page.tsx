@@ -144,7 +144,7 @@ function chipStyle(active: boolean): React.CSSProperties {
 type Tab = "OVERVIEW" | "ACTIVITY";
 
 export default function HomePage() {
-  const { publicKey, connected } = useWallet();
+  const { publicKey } = useWallet();
 
   // ✅ mobile 真实状态：publicKey 才可信
   const wallet = useMemo(() => (publicKey ? publicKey.toBase58() : ""), [publicKey]);
@@ -161,7 +161,7 @@ export default function HomePage() {
 
   const [proofSource, setProofSource] = useState<"global" | "wallet" | "none">("none");
 
-  // ✅ 你说 on-chain 已运行：默认以 ONCHAIN 展示（后续接 /api/chain/status 再动态）
+  // ✅ 默认 ONCHAIN（你说已运行）
   const [chainStatus, setChainStatus] = useState<ChainStatus>({
     mode: "ONCHAIN",
     network: "solana",
@@ -198,9 +198,6 @@ export default function HomePage() {
   async function loadChainStatus() {
     try {
       const j = await fetch("/api/chain/status", { cache: "no-store" }).then((r) => r.json());
-
-      // 兼容你当前后端返回结构：
-      // { ok, queue:{length}, lastSyncAt, finalizedCount, lastError }
       if (j?.ok) {
         setChainStatus((prev) => ({
           ...prev,
@@ -217,7 +214,7 @@ export default function HomePage() {
         }));
       }
     } catch {
-      // 不要把页面弄报错：保持现状即可
+      // keep silent
     }
   }
 
@@ -269,7 +266,6 @@ export default function HomePage() {
       setProofs(cleaned);
       setLastUpdated(Date.now());
 
-      // ✅ on-chain 运行：优先用 proof 的链上状态推断（没有也保持 ONCHAIN 展示）
       setChainStatus((prev) => {
         const pendingQueue = cleaned.filter((p) => p.chainStatus === "QUEUED").length;
         const onchainRecords = cleaned.filter((p) => p.chainStatus === "FINALIZED").length;
@@ -311,7 +307,7 @@ export default function HomePage() {
 
   useEffect(() => {
     loadChainStatus();
-    const t = setInterval(loadChainStatus, 8000); // 8秒刷新一次
+    const t = setInterval(loadChainStatus, 8000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -385,12 +381,12 @@ export default function HomePage() {
     });
   }, [proofs, activityQuery, maps]);
 
-  /* =========================
-     Render
-  ========================= */
-
   const phaseLabel =
-    chainStatus.mode === "ONCHAIN" ? "On-chain · Live" : chainStatus.mode === "PREPARING" ? "On-chain · Preparing" : "MVP · Off-chain";
+    chainStatus.mode === "ONCHAIN"
+      ? "On-chain · Live"
+      : chainStatus.mode === "PREPARING"
+      ? "On-chain · Preparing"
+      : "MVP · Off-chain";
 
   return (
     <main
@@ -400,6 +396,10 @@ export default function HomePage() {
         paddingBottom: "clamp(56px, 10vw, 80px)",
         maxWidth: 1160,
         margin: "0 auto",
+
+        // ✅ 关键兜底：防止 layout/body 深色透出来（你截图黑边/灰卡就是这里）
+        minHeight: "calc(100vh - 64px)",
+        background: "#ffffff",
       }}
     >
       {/* Hero */}
@@ -464,10 +464,10 @@ export default function HomePage() {
                   lineHeight: 1.65,
                 }}
               >
-                A universal Proof-of-Contribution console for projects and users. Review remains human; the chain is the permanent record.
+                A universal Proof-of-Contribution console for projects and users. Review remains human; the chain is the
+                permanent record.
               </p>
 
-              {/* ✅ 对外解释（6 行，投资人/第三方一眼看懂） */}
               <div style={externalBrief}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                   <div style={{ fontWeight: 950, fontSize: 13 }}>What is One Mission ?</div>
@@ -483,7 +483,6 @@ export default function HomePage() {
                 </div>
               </div>
 
-              {/* ✅ Hero shortcuts */}
               <div className="om-hero-actions" style={{ marginTop: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <a className="om-btn" href="/projects" style={btnPrimary}>
                   Create / Manage Projects
@@ -504,7 +503,6 @@ export default function HomePage() {
 
               {err && <div style={{ marginTop: 12, color: "#b91c1c", fontWeight: 950 }}>{err}</div>}
 
-              {/* Tabs */}
               <div className="om-tabs" style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button onClick={() => setTab("OVERVIEW")} style={chipStyle(tab === "OVERVIEW")}>
                   Overview
@@ -514,13 +512,11 @@ export default function HomePage() {
                 </button>
               </div>
 
-              {/* ✅ 填补左侧空档：展示块 */}
               <div style={{ marginTop: 12 }}>
                 <HeroVisual />
               </div>
             </div>
 
-            {/* Right column */}
             <div className="om-hero-right" style={{ flex: "1 1 380px", minWidth: 280, maxWidth: 520 }}>
               <div style={card}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
@@ -560,7 +556,11 @@ export default function HomePage() {
                   <StatRow
                     label="Mode"
                     value={
-                      chainStatus.mode === "ONCHAIN" ? "On-chain (live)" : chainStatus.mode === "PREPARING" ? "Preparing" : "Off-chain"
+                      chainStatus.mode === "ONCHAIN"
+                        ? "On-chain (live)"
+                        : chainStatus.mode === "PREPARING"
+                        ? "Preparing"
+                        : "Off-chain"
                     }
                   />
                   <StatRow label="Last sync" value={chainStatus.lastSyncAt ? fmtTime(chainStatus.lastSyncAt) : "—"} />
@@ -590,7 +590,6 @@ export default function HomePage() {
                 </div>
               </div>
 
-              {/* ✅ Rights Binding（Universal） */}
               <div style={{ marginTop: 12, ...card }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
                   <div style={{ fontSize: 14, fontWeight: 950 }}>Rights Binding (Universal)</div>
@@ -636,11 +635,12 @@ export default function HomePage() {
       {/* Body */}
       {tab === "OVERVIEW" ? (
         <>
-          {/* System map */}
           <section style={{ marginTop: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
               <div style={{ fontSize: 16, fontWeight: 950 }}>System map</div>
-              <div style={{ fontSize: 13, opacity: 0.75 }}>Operational console · Proof is the source of truth, on-chain is the receipt</div>
+              <div style={{ fontSize: 13, opacity: 0.75 }}>
+                Operational console · Proof is the source of truth, on-chain is the receipt
+              </div>
             </div>
 
             <div style={{ marginTop: 10 }}>
@@ -648,7 +648,6 @@ export default function HomePage() {
             </div>
           </section>
 
-          {/* Next actions */}
           <section style={{ marginTop: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
               <div style={{ fontSize: 16, fontWeight: 950 }}>Next actions</div>
@@ -696,7 +695,6 @@ export default function HomePage() {
             </div>
           </section>
 
-          {/* Recent activity */}
           <section style={{ marginTop: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
               <div style={{ fontSize: 16, fontWeight: 950 }}>Recent activity</div>
@@ -791,7 +789,6 @@ export default function HomePage() {
             </div>
           </section>
 
-          {/* CTA */}
           <section style={{ marginTop: 18 }}>
             <FinalCta mode={chainStatus.mode} />
           </section>
@@ -804,7 +801,6 @@ export default function HomePage() {
         </>
       ) : (
         <>
-          {/* Activity tab */}
           <section style={{ marginTop: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
               <div style={{ fontSize: 16, fontWeight: 950 }}>Activity</div>
@@ -899,14 +895,17 @@ export default function HomePage() {
         </>
       )}
 
-      {/* ✅ Mobile fixes: 不改结构，只做断点布局（手机不挤压/不重叠/按钮全宽/Proof 行上下排） */}
+      {/* ✅ Mobile + iOS 兜底（不改结构，只修布局 & 背景透黑问题） */}
       <style jsx>{`
-        /* 通用：避免 flex 子项被长文本撑爆 */
         :global(.om-main *) {
           box-sizing: border-box;
         }
 
-        /* Tabs 在小屏时允许横向滚动（避免挤压） */
+        /* ✅ 关键：防止外层深色背景透出来（尤其 iOS Safari） */
+        :global(html, body) {
+          background: #ffffff !important;
+        }
+
         :global(.om-tabs) {
           overflow-x: auto;
           padding-bottom: 6px;
@@ -916,9 +915,7 @@ export default function HomePage() {
           height: 6px;
         }
 
-        /* 断点：手机 */
         @media (max-width: 640px) {
-          /* Hero 左右列强制上下堆叠，避免“右侧卡挤到左侧” */
           :global(.om-hero-row) {
             flex-direction: column !important;
             align-items: stretch !important;
@@ -929,12 +926,10 @@ export default function HomePage() {
             max-width: 100% !important;
           }
 
-          /* 顶部 meta 行更紧凑 */
           :global(.om-hero-meta) {
             gap: 8px !important;
           }
 
-          /* Hero buttons：手机全宽一列 */
           :global(.om-hero-actions) {
             display: grid !important;
             grid-template-columns: 1fr !important;
@@ -945,12 +940,10 @@ export default function HomePage() {
             text-align: center !important;
           }
 
-          /* Grid 统一：手机单列，避免 auto-fit 在窄屏出现两列挤压 */
           :global(.om-grid) {
             grid-template-columns: 1fr !important;
           }
 
-          /* Activity 控制区：输入框全宽 */
           :global(.om-activity-controls) {
             flex-direction: column !important;
             align-items: stretch !important;
@@ -959,7 +952,6 @@ export default function HomePage() {
             width: 100% !important;
           }
 
-          /* Proof 行：左右变上下，右侧信息靠左，避免挤压 */
           :global(.om-proof-row) {
             flex-direction: column !important;
             align-items: stretch !important;
@@ -969,7 +961,6 @@ export default function HomePage() {
           }
         }
 
-        /* 平板：允许更松弛的排版（可选加强） */
         @media (min-width: 641px) and (max-width: 1024px) {
           :global(.om-hero-right) {
             max-width: 520px !important;
@@ -1109,7 +1100,7 @@ function ActionCard(props: {
   );
 }
 
-/* ---------- Hero Visual (fills the blank area) ---------- */
+/* ---------- Hero Visual ---------- */
 
 function HeroVisual() {
   const [logoOk, setLogoOk] = React.useState(true);
@@ -1127,7 +1118,6 @@ function HeroVisual() {
       </div>
 
       <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
-        {/* Pipeline */}
         <div style={heroVisualBox}>
           <div style={{ fontSize: 12, fontWeight: 950, opacity: 0.78 }}>Pipeline</div>
 
@@ -1143,10 +1133,11 @@ function HeroVisual() {
             <span style={miniPill}>Receipt</span>
           </div>
 
-          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.76, lineHeight: 1.55 }}>Receipt is immutable; it’s not auto-distribution.</div>
+          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.76, lineHeight: 1.55 }}>
+            Receipt is immutable; it’s not auto-distribution.
+          </div>
         </div>
 
-        {/* Rights mapping */}
         <div style={heroVisualBox}>
           <div style={{ fontSize: 12, fontWeight: 950, opacity: 0.78 }}>Rights mapping</div>
 
@@ -1166,7 +1157,6 @@ function HeroVisual() {
           </div>
         </div>
 
-        {/* Brand slot */}
         <div style={heroVisualBox}>
           <div style={{ fontSize: 12, fontWeight: 950, opacity: 0.78 }}>Brand slot</div>
 
@@ -1406,8 +1396,10 @@ const heroWrap: React.CSSProperties = {
   border: "1px solid #e5e7eb",
   borderRadius: 18,
   padding: "clamp(14px, 3.5vw, 20px)",
+  // ✅ iOS 玻璃卡会发灰：这里加 #fff 做兜底
   background:
-    "radial-gradient(1200px 420px at 20% 0%, rgba(17,24,39,0.10), transparent), radial-gradient(800px 300px at 90% 20%, rgba(17,24,39,0.06), transparent)",
+    "radial-gradient(1200px 420px at 20% 0%, rgba(17,24,39,0.10), transparent), radial-gradient(800px 300px at 90% 20%, rgba(17,24,39,0.06), transparent), #ffffff",
+  boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
 };
 
 const externalBrief: React.CSSProperties = {
@@ -1415,8 +1407,8 @@ const externalBrief: React.CSSProperties = {
   border: "1px solid #e5e7eb",
   borderRadius: 16,
   padding: 14,
-  background: "rgba(255,255,255,0.85)",
-  backdropFilter: "blur(6px)",
+  // ✅ 不用 rgba + blur，避免手机发灰
+  background: "#ffffff",
 };
 
 const heroVisual: React.CSSProperties = {
@@ -1424,8 +1416,8 @@ const heroVisual: React.CSSProperties = {
   border: "1px solid #e5e7eb",
   borderRadius: 18,
   padding: 14,
-  background: "rgba(255,255,255,0.82)",
-  backdropFilter: "blur(6px)",
+  // ✅ 不用 rgba + blur，避免手机发灰
+  background: "#ffffff",
 };
 
 const heroVisualBox: React.CSSProperties = {
@@ -1738,29 +1730,4 @@ const ctaGhost: React.CSSProperties = {
   color: "white",
   fontWeight: 950,
   textDecoration: "none",
-};
-
-const brandSlot: React.CSSProperties = {
-  display: "flex",
-  gap: 14,
-  alignItems: "center",
-};
-
-const brandLogoWrap: React.CSSProperties = {
-  width: 48,
-  height: 48,
-  borderRadius: 14,
-  border: "1px solid #e5e7eb",
-  background: "#f9fafb",
-  display: "grid",
-  placeItems: "center",
-  flexShrink: 0,
-};
-
-const brandLogo: React.CSSProperties = {
-  width: "100%",
-  height: "100%",
-  objectFit: "contain",
-  padding: 6,
-  display: "block",
 };
